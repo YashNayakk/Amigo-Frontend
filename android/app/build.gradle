@@ -73,6 +73,17 @@ def enableProguardInReleaseBuilds = true
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
+    splits{
+        abi{
+            reset()
+            enable true
+            universalApk false
+            include "armeabi-v7a",
+                    "arm64-v8a",
+                    "x86",
+                    "x86_64"
+        }
+    }
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
@@ -110,6 +121,7 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.release
             signingConfig signingConfigs.debug
+            shrinkResources true
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
