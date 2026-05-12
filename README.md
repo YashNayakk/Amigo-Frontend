@@ -129,12 +129,12 @@ Flip your phone face-down. Amigo's sensor mode detects it and tracks your focus 
 
 ---
 
-## 🔧 What's Being Improved
+## 🔧 What's Need Improved
 
 - 🔐 **Authentication** — making it more secure
 - 🃏 **Card Sharing** — Socket.IO stability improvements  
-- 🎨 **UI** — cleaner, smoother, dark mode
-- ⚠️ **Error Handling** — better feedback everywhere
+- 🎨 **UI** — cleaner, smoother, few changes
+- ⚠️ **Error Handling** — better error handling & feedback everywhere
 
 ---
 
