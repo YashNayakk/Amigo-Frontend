@@ -1,97 +1,162 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# 🤝 Amigo — Habit Tracker with Social Witness
 
-# Getting Started
+> Build habits. Stay accountable. Witness each other's journey.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+Most habit apps are a solo game. **Amigo is different.**
 
-## Step 1: Start Metro
+Amigo pairs you with real people — your **witnesses** — who see your progress, share their own work cards with you in real time, and keep you honest through streaks and shared goals. It's not just about tracking habits. It's about doing hard things with people who actually care.
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+---
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## ✨ What Makes Amigo Different
 
-```sh
-# Using npm
-npm start
+| Feature | What it does |
+|---|---|
+| 🧠 **Habit Tracking** | Yes/No habits or measurable ones — *"How many pages did you read?"* |
+| 👁️ **Witness System** | Add friends as witnesses. They see your progress. You see theirs. |
+| 🃏 **Live Card Sharing** | Share work cards (DSA progress, study sessions, etc.) in real time via Socket.IO |
+| 📅 **Daily Check-in** | Start your day consciously with a quick check-in ritual |
+| 📊 **Performance Tracking** | Habits + check-ins analyzed with graphs, scores, and a momentum algorithm |
+| 🔁 **Witness Streaks** | You and your witness build a shared streak — break it and you both feel it |
+| 👥 **Pods** | Form a group of witnesses working toward a collective goal |
+| 📵 **Flip-phone Mode** | Uses device sensors to detect phone face-down — your focus time, enforced |
 
-# OR using Yarn
-yarn start
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) v16+
+- [React Native CLI](https://reactnative.dev/docs/environment-setup)
+- [MongoDB](https://www.mongodb.com/) (local or Atlas)
+- Android Studio / Xcode or a physical device
+
+### Installation
+
+```bash
+git clone https://github.com/YashNayakk/Amigo-Frontend.git
+cd Amigo-Frontend
+npm install
+
+# iOS only
+cd ios && pod install && cd ..
 ```
 
-## Step 2: Build and run your app
+### Environment Setup
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+Create a `.env` file in the root:
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```env
+MONGO_URI=your_mongodb_connection_string
+PORT=5000
+JWT_SECRET=your_jwt_secret
+SOCKET_PORT=5001
 ```
 
-### iOS
+### Run It
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+```bash
+# Backend
+cd server && npm run dev
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+# React Native (new terminal)
+npx react-native start
 
-```sh
-bundle install
+# Android
+npx react-native run-android
+
+# iOS
+npx react-native run-ios
 ```
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Mobile** | React Native |
+| **Backend** | Node.js + Express.js |
+| **Database** | MongoDB |
+| **API** | REST |
+| **Real-time** | Socket.IO |
+| **Sensors** | React Native device sensors |
+
+### Project Structure
+
+```
+Amigo/
+├── client/
+│   ├── screens/          # App screens
+│   ├── components/       # Reusable UI components
+│   └── utils/            # Helpers & sensor logic
+├── server/
+│   ├── routes/           # REST API routes
+│   ├── models/           # MongoDB schemas
+│   ├── controllers/      # Business logic
+│   └── socket/           # Socket.IO handlers
+└── README.md
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+---
 
-```sh
-# Using npm
-npm run ios
+## 🗺️ How It Works
 
-# OR using Yarn
-yarn ios
-```
+**1. Sign Up & Check In**
+Create your account and start each day with a daily check-in — a small ritual to set your intention.
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+**2. Build Your Habits**
+Add habits that matter. Simple yes/no ("Did you meditate?") or measurable ("How many pages?"). Amigo tracks both.
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+**3. Find Your Witnesses**
+Search for friends and send a witness request. Once connected, you're in each other's world.
 
-## Step 3: Modify your app
+**4. Share Work Cards**
+Finished a study session? Share a card — your witnesses see it live instantly, no refresh needed.
 
-Now that you have successfully run the app, let's make changes!
+**5. Track Your Momentum**
+Your check-ins and habits feed into a personal score and momentum graph. See your consistency, not just your streaks.
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+**6. Build Streaks Together**
+Maintain a shared streak with your witness. It's not just your habit on the line — it's both of yours.
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+**7. Form Pods**
+Got a group working toward something bigger? Create a Pod — a shared witness group with a collective goal.
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+**8. Stay Off Your Phone**
+Flip your phone face-down. Amigo's sensor mode detects it and tracks your focus time. That's the whole point.
 
-## Congratulations! :tada:
+---
 
-You've successfully run and modified your React Native App. :partying_face:
+## 🔧 What's Being Improved
 
-### Now what?
+- 🔐 **Authentication** — making it more secure
+- 🃏 **Card Sharing** — Socket.IO stability improvements  
+- 🎨 **UI** — cleaner, smoother, dark mode
+- ⚠️ **Error Handling** — better feedback everywhere
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+---
 
-# Troubleshooting
+## 🤝 Contributing
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+1. Fork the repo
+2. Create a branch: `git checkout -b feature/your-feature`
+3. Commit: `git commit -m "Add: your feature"`
+4. Push & open a Pull Request
 
-# Learn More
+For major changes, open an issue first.
 
-To learn more about React Native, take a look at the following resources:
+---
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+## 📄 License
+
+[MIT](LICENSE)
+
+---
+
+<div align="center">
+  Built with ❤️ by <a href="https://github.com/YashNayakk">Yash Nayak</a>
+  <br/>
+  <i>Because accountability is better together.</i>
+</div>
