@@ -153,10 +153,21 @@ export default function HabitsScreen() {
       setHabits(await res.json());
     } catch (e) {
       console.error(e);
-
     }
     finally { setLoading(false); }
   };
+
+  const deleteHabit = async (habitId) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      await fetch(HabitEndpoints.DELETE(habitId), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   const openType = () => setShowTypeModal(true);
 
@@ -240,45 +251,49 @@ export default function HabitsScreen() {
 
         <View style={s.divider} />
 
-        {loading ? (
-          <View style={s.emptyState}>
-            <ActivityIndicator color={T.mid} />
-          </View>
-        ) : habits.length === 0 ? (
+        {loading ?(
           <View style={s.emptyState}>
             <View style={s.emptyRing}>
               <Icon name="repeat-outline" size={28} color={T.mid} />
             </View>
-            <Text style={s.emptyTitle}>No habits yet</Text>
-            <Text style={s.emptyDesc}>Tap "New Habit" to start building your streak</Text>
+            <Text style={s.emptyTitle}>loading Habits...</Text>
+            <Text style={s.emptyDesc}>Please wait while we load the habit</Text>
           </View>
+        ) : habits.length === 0 ? (
+        <View style={s.emptyState}>
+          <View style={s.emptyRing}>
+            <Icon name="repeat-outline" size={28} color={T.mid} />
+          </View>
+          <Text style={s.emptyTitle}>No habits yet</Text>
+          <Text style={s.emptyDesc}>Tap "New Habit" to start building your streak</Text>
+        </View>
         ) : habits.map((habit) => (
-          <View key={habit._id}>
-            <View style={s.habitRow}>
-              {/* Name col */}
-              <View style={s.habitInfo}>
-                <Text style={s.habitName} numberOfLines={1}>{habit.name}</Text>
-                <View style={s.habitMeta}>
-                  <View style={s.habitTypePill}>
-                    <Text style={s.habitTypePillText}>
-                      {habit.type === 'yesno' ? 'YES / NO' : `${habit.target} ${habit.unit}`.toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={s.habitFreq}>{habit.frequency}</Text>
-                </View>
-              </View>
+        <View key={habit._id}>
+          <View style={s.habitRow}>
 
-              {days.map(day => (
-                <View key={day.date} style={s.dayCell}>
-                  <DayCell habit={habit} day={day} onPress={() => openLog(habit, day)} />
+            <View style={s.habitInfo}>
+              <Text style={s.habitName} numberOfLines={1}>{habit.name}</Text>
+              <View style={s.habitMeta}>
+                <View style={s.habitTypePill}>
+                  <Text style={s.habitTypePillText}>
+                    {habit.type === 'yesno' ? 'YES / NO' : `${habit.target} ${habit.unit}`.toUpperCase()}
+                  </Text>
                 </View>
-              ))}
+                <Text style={s.habitFreq}>{habit.frequency}</Text>
+              </View>
             </View>
-            <View style={s.rowDivider} />
+
+            {days.map(day => (
+              <View key={day.date} style={s.dayCell}>
+                <DayCell habit={habit} day={day} onPress={() => openLog(habit, day)} />
+              </View>
+            ))}
           </View>
+          <View style={s.rowDivider} />
+        </View>
         ))}
 
-      </ScrollView>
+      </ScrollView >
 
       <Modal visible={showTypeModal} transparent animationType="slide" onRequestClose={() => setShowTypeModal(false)}>
         <View style={s.overlay}>
@@ -513,7 +528,7 @@ export default function HabitsScreen() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
@@ -560,7 +575,7 @@ const s = StyleSheet.create({
   sheetIconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: T.raised, borderWidth: 1, borderColor: T.hi, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 14 },
   sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 },
   sheetTitle: { color: T.text, fontSize: 22, fontWeight: '900', letterSpacing: -0.4, marginBottom: 4 },
-  sheetDesc: { color: T.mid, fontSize: 13, lineHeight: 19, marginBottom:"2%" },
+  sheetDesc: { color: T.mid, fontSize: 13, lineHeight: 19, marginBottom: "2%" },
   sheetCancelBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   sheetCancelText: { color: T.mid, fontSize: 14, fontWeight: '500' },
 

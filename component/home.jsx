@@ -14,6 +14,7 @@ import HabitScreen from "../component/HabitsSection";
 import { PerformanceEndpoints } from "../services/apis";
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useMemo } from 'react';
+import NetInfo from "@react-native-community/netinfo";
 
 const { width, height } = Dimensions.get("window");
 
@@ -69,6 +70,15 @@ const Home = ({ navigation }) => {
     score: 0,
     momentum: 0,
   });
+  const [state, setState] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setState(state);
+    });
+    NetInfo.fetch().then(setState);
+    return()=> unsubscribe();
+  }, [])
 
   useEffect(() => {
     loadUserData();
@@ -228,15 +238,29 @@ const Home = ({ navigation }) => {
           </View>
         </View>
 
-        <View style={styles.mascotSection}>
-          <Image
-            style={styles.mascot}
-            source={require("../Images/mascoti.png")}
-          />
-          <View style={styles.speechBubble}>
-            <Text style={styles.mascotText}>How is the day going?</Text>
+        {state?.isConnected ?
+          <View style={styles.mascotSection}>
+            <Image
+              style={styles.mascot}
+              source={require("../Images/mascoti.png")}
+            />
+            <View style={styles.speechBubble}>
+              <Text style={styles.mascotText}>
+                How's the day going?</Text>
+            </View>
+          </View> :
+          <View style={styles.mascotSection}>
+            <Image
+              style={styles.mascot}
+              source={require("../Images/mascotc.png")}
+            />
+            <View style={styles.speechBubble}>
+              <Text style={styles.mascotTextError}>
+                No internet connection</Text>
+            </View>
           </View>
-        </View>
+
+        }
 
         <View style={styles.actionButtons}>
           <TouchableOpacity
@@ -303,7 +327,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    flex:1,
+    flex: 1,
     //width: width - 32,
     height: 140,
     backgroundColor: T.surface,       // #101010
@@ -424,6 +448,11 @@ const styles = StyleSheet.create({
   },
   mascotText: {
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  mascotTextError: {
+    color: "#ff4d4d",
     fontSize: 16,
     fontWeight: "500",
   },

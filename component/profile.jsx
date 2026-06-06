@@ -96,7 +96,7 @@ const StatCol = ({ value, label, divider }) => (
   </View>
 );
 const sc = StyleSheet.create({
-  outer: { flexDirection: "row", flex: 1 },
+  outer: { flexDirection: "row", flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 14, },
   inner: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 16, gap: 24 },
   val: { color: T.text, fontSize: 20, fontWeight: "900", letterSpacing: -0.8, marginBottom: 4 },
   label: { color: T.dim, fontSize: 8, fontWeight: "700", letterSpacing: 1.8 },
@@ -261,6 +261,9 @@ const Profile = () => {
           <Text style={[s.loadingText, { marginBottom: 20 }]}>
             Could not load profile
           </Text>
+          <TouchableOpacity style={s.retryButton} onPress={loadProfile}>
+            <Text style={s.retryText}>Try Again</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[s.editBtn, { paddingHorizontal: 24 }]}
             onPress={handleLogout}
@@ -307,16 +310,18 @@ const Profile = () => {
             {/* Stats to the right of avatar — Instagram DNA */}
             <View style={s.heroStats}>
               <StatCol value={user?.WitnessCount || 0} label="WITNESSES" divider />
+              <View style={s.rolePill}>
+                <View style={s.roleDot} />
+                <Text style={s.rolePillText}>{getRoleLabel(user?.role).toUpperCase()}</Text>
+              </View>
             </View>
           </View>
+        
 
           {/* Name + role pill */}
           <View style={s.nameBlock}>
             <Text style={s.heroName}>{user?.name || "User"}</Text>
-            <View style={s.rolePill}>
-              <View style={s.roleDot} />
-              <Text style={s.rolePillText}>{getRoleLabel(user?.role).toUpperCase()}</Text>
-            </View>
+
           </View>
 
           {/* Bio */}
@@ -346,13 +351,10 @@ const Profile = () => {
             <Icon name="create-outline" size={14} color={T.text} />
             <Text style={s.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
-
         </View>
-
         {/* ── Divider ── */}
         <View style={s.sectionDivider} />
 
-        {/* ── Info tiles ── */}
         <View style={s.tilesSection}>
           <Text style={s.tilesSectionLabel}>OVERVIEW</Text>
           <View style={s.tilesGrid}>
@@ -533,7 +535,7 @@ const Profile = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-    </SafeAreaView>
+    </SafeAreaView >
   );
 };
 
@@ -586,23 +588,20 @@ const s = StyleSheet.create({
     left: -4,
     right: -4,
     bottom: -4,
-    borderRadius: 50,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: T.hi,
   },
-  avatar: { width: 86, height: 86, borderRadius: 43, borderWidth: 1.5, borderColor: T.surface },
+  avatar: { width: 86, height: 86, borderRadius: 13, borderWidth: 1.5, borderColor: T.surface },
   avatarFallback: { backgroundColor: T.raised, alignItems: "center", justifyContent: "center" },
   avatarInitial: { fontSize: 32, fontWeight: "900", color: T.mid, letterSpacing: -1 },
   cameraBadge: { position: "absolute", bottom: 2, right: 2, width: 22, height: 22, borderRadius: 11, backgroundColor: T.white, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: T.bg },
 
   heroStats: {
     flex: 1,
-    flexDirection: "row",
-    backgroundColor: T.surface,
-    borderWidth: 1,
-    borderColor: T.border,
-    borderRadius: 14,
+    flexDirection: "column",
     overflow: "hidden",
+    gap: 9,
   },
 
   // Name block
@@ -613,7 +612,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
   },
   heroName: { color: T.text, fontSize: 20, fontWeight: "900", letterSpacing: -0.4 },
-  rolePill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
+  rolePill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
   roleDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: T.mid },
   rolePillText: { color: T.dim, fontSize: 8, fontWeight: "700", letterSpacing: 1.5 },
 
@@ -675,6 +674,19 @@ const s = StyleSheet.create({
   fieldRow: { flexDirection: "row", alignItems: "center", backgroundColor: T.raised, borderWidth: 1, borderColor: T.hi, borderRadius: 12, paddingLeft: 14 },
   fieldPrefix: { color: T.mid, fontSize: 15, fontWeight: "600" },
   fieldFlex: { flex: 1, borderWidth: 0, paddingLeft: 6 },
+
+  retryButton: {
+    borderWidth: 0.8,
+    borderColor: "#fff",
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    borderRadius: 16,
+  },
+  retryText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
 
   roleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   roleChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, borderRadius: 10 },

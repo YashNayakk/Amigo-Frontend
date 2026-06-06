@@ -76,14 +76,16 @@ const Login = () => {
       if (isLogin) {
         const data = await AuthService.login(email, password);
         console.log('Login success:', data);
-
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Tabs' },]
-          })
-        );
+        ///if (data.success) {
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'Tabs' },]
+            })
+          );
+        //}
       } else {
+
         const data = await AuthService.signup(name, email, password);
         console.log('Signup success:', data);
 

@@ -30,14 +30,27 @@ const Metric = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [alreadyFinished, setAlreadyFinished] = useState(false)
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const errorShake = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchQuestions();
+    MetricHistory();
+
+    if(alreadyFinished){
+      fetchQuestions();
+      console.log("fetching")
+    }else{
+      setLoading(false);
+      setFetchError(true)
+    }
   }, []);
+
+  const today = new Date().toISOString().split("T")[0];
+
+
 
   const shakeAnimation = () => {
     Animated.sequence([
@@ -48,6 +61,20 @@ const Metric = () => {
       Animated.timing(errorShake, { toValue: 0, duration: 60, useNativeDriver: true }),
     ]).start();
   };
+  const MetricHistory =() =>{
+    try{
+      const token = AsyncStorage.getItem("token");
+      const response = fetch(MetricsEndpoints.GET_ALL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`Server error ${response.status}`);
+      const data = response.json();
+      if(today == data.date) setAlreadyFinished(true)
+        else setAlreadyFinished(false)
+    } catch (error) {
+      console.error("Error fetching metric history:", error);
+    }
+  }
 
   const fetchQuestions = async () => {
     setFetchError(false);
@@ -59,7 +86,7 @@ const Metric = () => {
       });
 
       if (!response.ok) throw new Error(`Server error ${response.status}`);
-
+      
       const data = await response.json();
       const qs = data.questions || [];
       if (qs.length === 0) throw new Error("No questions returned");
@@ -73,7 +100,7 @@ const Metric = () => {
   };
 
   const handleScrollEnd = (e) => {
-    const index = Math.round(e.nativeEvent.contentOffset.y / height);
+    const index = Math.round(e.nativeEvent.contentOffset.x / height);
     setActiveIndex(index);
   };
 

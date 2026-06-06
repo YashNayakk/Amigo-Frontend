@@ -306,6 +306,7 @@ const ShowcaseScreen = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
+      
       console.log("json",json)
       setData(Array.isArray(json) ? json : []);
     } catch (e) { console.error(e); }

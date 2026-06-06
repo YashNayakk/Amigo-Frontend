@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   TextInput, FlatList, Image, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WitnessEndpoints, CommitmentPodEndpoints } from '../services/apis';
 import { useNavigation } from '@react-navigation/native';
+import {MMKV} from 'react-native-mmkv';
 
 const T = {
   bg: '#080808', surface: '#101010', raised: '#181818',
@@ -25,9 +26,9 @@ const fmtDate = dateString => {
   return `${Math.floor(diff / 30)}mo`;
 };
 
+
 const ChatListScreen = () => {
   const navigation = useNavigation();
-
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [connections, setConnections] = useState([]);
@@ -36,6 +37,7 @@ const ChatListScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const FILTERS = ['All', 'Witness', 'Pods'];
+  const storage = new MMKV();
 
   useEffect(() => { loadAll(); }, []);
 
@@ -47,12 +49,17 @@ const ChatListScreen = () => {
 
   const loadConnections = async () => {
     try {
+      const cached = storage.getString('connections');
+      if (cached) {
+        setConnections(JSON.parse(cached));
+      }
+
       const token = await AsyncStorage.getItem("token");
       const res = await fetch(WitnessEndpoints.GET_CONNECTIONS, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
       if (res?.success) {
-        setConnections((res.data || []).map(conn => ({
+        const formatted = (res.data || []).map(conn => ({
           _id: conn?.user?._id || conn?.user?.id,
           chatId: conn?.relationId,
           name: conn?.user?.name,
@@ -62,13 +69,20 @@ const ChatListScreen = () => {
           unread: 0,
           type: 'witness',
           sortDate: new Date(conn?.createdAt),
-        })));
+        }));
+        setConnections(formatted);
+        storage.set('connections', JSON.stringify(formatted));
       }
     } catch (err) { console.error("loadConnections:", err); }
   };
 
   const loadPods = async () => {
     try {
+      const cached = storage.getString('pods');
+      if (cached) {
+        setPods(JSON.parse(cached));
+      }
+
       const token = await AsyncStorage.getItem("token");
       const userId = await AsyncStorage.getItem("userId");
 
@@ -132,6 +146,8 @@ const ChatListScreen = () => {
         return true;
       });
       setPods(merged);
+
+      storage.set('pods', JSON.stringify(merged));
     } catch (err) { console.error("loadPods:", err); }
   };
 
@@ -166,7 +182,6 @@ const ChatListScreen = () => {
   const renderItem = ({ item }) => (
     <TouchableOpacity style={s.row} onPress={() => handlePress(item)} activeOpacity={0.75}>
 
-      {/* Avatar */}
       <View style={s.avatarWrap}>
         {item.type === 'pod' ? (
           <View style={[s.avatarCircle, s.podCircle]}>
@@ -221,9 +236,8 @@ const ChatListScreen = () => {
   return (
     <View style={s.wrap}>
 
-      {/* Header */}
       <View style={s.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={s.headerEyebrow}>INBOX</Text>
           <Text style={s.headerTitle}>Share with Real Connections</Text>
         </View>
@@ -302,14 +316,12 @@ const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.bg },
   center: { justifyContent: 'center', alignItems: 'center' },
 
-  // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
   headerEyebrow: { color: T.dim, fontSize: 9, fontWeight: '700', letterSpacing: 2, marginBottom: 3 },
   headerTitle: { color: T.text, fontSize: 28, fontWeight: '900', letterSpacing: -0.8 },
   notifBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },
 
-  // Search
-  searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 12 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 12 },
   searchInput: { flex: 1, fontSize: 14, color: T.text },
 
   // Filters
