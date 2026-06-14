@@ -22,6 +22,7 @@ const T = {
   dim: '#444',
   white: '#ffffff',
   black: '#000000',
+  danger:'#ff4d4f',
 };
 
 const toLocalDateStr = (d) => {
@@ -121,7 +122,7 @@ const dc = StyleSheet.create({
 });
 
 export default function HabitsScreen() {
-  const [habits, setHabits] = useState([]);
+  const [habits, setHabits] = useState();
   const [loading, setLoading] = useState(true);
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -150,7 +151,9 @@ export default function HabitsScreen() {
       const res = await fetch(HabitEndpoints.GET_ALL, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setHabits(await res.json());
+      const  data = await res.json();
+      setHabits(data);
+      console.log("habits", data)
     } catch (e) {
       console.error(e);
     }
@@ -160,10 +163,13 @@ export default function HabitsScreen() {
   const deleteHabit = async (habitId) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      await fetch(HabitEndpoints.DELETE(habitId), {
+      const res = await fetch(HabitEndpoints.DELETE(habitId), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("Deleted habit", habitId);
+      console.log("Delete response", res);
+      await loadHabits();
     } catch (e) {
       console.error(e);
     }
@@ -247,6 +253,8 @@ export default function HabitsScreen() {
               </View>
             </View>
           ))}
+
+          <View style={{ width: 32, marginLeft: 24 }} />
         </View>
 
         <View style={s.divider} />
@@ -288,6 +296,10 @@ export default function HabitsScreen() {
                 <DayCell habit={habit} day={day} onPress={() => openLog(habit, day)} />
               </View>
             ))}
+
+            <TouchableOpacity style={{ width:32, marginLeft:24 }} onPress={() => deleteHabit(habit?._id)}>
+              <Icon name="trash-outline" size={19} color={T.danger} />
+            </TouchableOpacity>
           </View>
           <View style={s.rowDivider} />
         </View>
@@ -544,7 +556,7 @@ const s = StyleSheet.create({
   addBtnText: { color: T.black, fontSize: 13, fontWeight: '800', letterSpacing: -0.1 },
 
   // Table head
-  tableHead: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
+  tableHead: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
   dayHeadCol: { width: 52, alignItems: 'center', gap: 4 },
   dayHeadName: { color: T.dim, fontSize: 8, fontWeight: '700', letterSpacing: 1.5 },
   dayHeadNum: { width: 28, height: 28, borderRadius: 8, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },
@@ -559,7 +571,7 @@ const s = StyleSheet.create({
   habitTypePill: { backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   habitTypePillText: { color: T.dim, fontSize: 8, fontWeight: '700', letterSpacing: 1 },
   habitFreq: { color: T.dim, fontSize: 10, fontWeight: '500', textTransform: 'capitalize' },
-  dayCell: { width: 52, alignItems: 'center' },
+  dayCell: { width: 52, alignItems: 'center',},
   rowDivider: { height: 1, backgroundColor: T.border, marginHorizontal: 20 },
 
   // Empty state

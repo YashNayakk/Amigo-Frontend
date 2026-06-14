@@ -7,7 +7,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WitnessEndpoints, CommitmentPodEndpoints } from '../services/apis';
 import { useNavigation } from '@react-navigation/native';
-import {MMKV} from 'react-native-mmkv';
+import  MMKV  from 'react-native-mmkv';
 
 const T = {
   bg: '#080808', surface: '#101010', raised: '#181818',
@@ -16,6 +16,17 @@ const T = {
   white: '#ffffff', black: '#000000',
 };
 
+// ── Shared MMKV instance ──────────────────────────────────────────────────────
+let _storage = null;
+const getStorage = ()=>{
+  if(!_storage){
+    _storage = new MMKV({id: 'chat-storage'});
+    return _storage;
+  }
+}
+const CACHE_CONNECTIONS = 'chat_connections_v1';
+const CACHE_PODS        = 'chat_pods_v1';
+
 const fmtDate = dateString => {
   if (!dateString) return '';
   const diff = Math.floor((Date.now() - new Date(dateString)) / 86400000);
@@ -23,93 +34,113 @@ const fmtDate = dateString => {
   if (diff === 1) return '1d';
   if (diff < 7) return `${diff}d`;
   if (diff < 30) return `${Math.floor(diff / 7)}w`;
-  return `${Math.floor(diff / 30)}mo`;
+  return `${Math.floor(diff / 30)}month`;
 };
 
+const readCache = (key) => {
+  try {
+    const raw = getStorage().getString(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
 
+const writeCache = (key, value) => {
+  try { getStorage().set(key, JSON.stringify(value)); } catch { /* ignore */ }
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
 const ChatListScreen = () => {
   const navigation = useNavigation();
+
   const [activeFilter, setActiveFilter] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [connections, setConnections] = useState([]);
-  const [pods, setPods] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery]   = useState('');
+  const [connections, setConnections]   = useState([]);
+  const [pods, setPods]                 = useState([]);
+  // loading is only true on the very first open when cache is also empty
+  const [loading, setLoading]           = useState(false);
+  const [refreshing, setRefreshing]     = useState(false);
 
   const FILTERS = ['All', 'Witness', 'Pods'];
-  const storage = new MMKV();
 
   useEffect(() => { loadAll(); }, []);
 
+  // ── Main loader ─────────────────────────────────────────────────────────────
   const loadAll = async () => {
-    setLoading(true);
+    // 1. Paint from cache immediately (synchronous MMKV read)
+    const cachedConnections = readCache(CACHE_CONNECTIONS);
+    const cachedPods        = readCache(CACHE_PODS);
+
+    if (cachedConnections) setConnections(cachedConnections);
+    if (cachedPods)        setPods(cachedPods);
+
+    // 2. Show full-screen loader only if both caches are cold
+    const hasCachedData = cachedConnections || cachedPods;
+    if (!hasCachedData) setLoading(true);
+
+    // 3. Fetch fresh data in background
     await Promise.all([loadConnections(), loadPods()]);
+
     setLoading(false);
   };
 
+  // ── Connections ─────────────────────────────────────────────────────────────
   const loadConnections = async () => {
     try {
-      const cached = storage.getString('connections');
-      if (cached) {
-        setConnections(JSON.parse(cached));
-      }
-
       const token = await AsyncStorage.getItem("token");
-      const res = await fetch(WitnessEndpoints.GET_CONNECTIONS, {
+      const res   = await fetch(WitnessEndpoints.GET_CONNECTIONS, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
+
       if (res?.success) {
         const formatted = (res.data || []).map(conn => ({
-          _id: conn?.user?._id || conn?.user?.id,
-          chatId: conn?.relationId,
-          name: conn?.user?.name,
-          avatar: conn?.user?.profilePicture,
-          message: 'Tap to share activities',
-          time: fmtDate(conn?.createdAt),
-          unread: 0,
-          type: 'witness',
+          _id:      conn?.user?._id || conn?.user?.id,
+          chatId:   conn?.relationId,
+          name:     conn?.user?.name,
+          avatar:   conn?.user?.profilePicture,
+          message:  'Tap to share activities',
+          time:     fmtDate(conn?.createdAt),
+          unread:   0,
+          type:     'witness',
           sortDate: new Date(conn?.createdAt),
         }));
         setConnections(formatted);
-        storage.set('connections', JSON.stringify(formatted));
+        writeCache(CACHE_CONNECTIONS, formatted);
       }
-    } catch (err) { console.error("loadConnections:", err); }
+    } catch (err) {
+      // Network error — cached data already shown, nothing extra needed
+      console.warn('loadConnections offline, showing cache:', err.message);
+    }
   };
 
+  // ── Pods ────────────────────────────────────────────────────────────────────
   const loadPods = async () => {
     try {
-      const cached = storage.getString('pods');
-      if (cached) {
-        setPods(JSON.parse(cached));
-      }
-
-      const token = await AsyncStorage.getItem("token");
+      const token  = await AsyncStorage.getItem("token");
       const userId = await AsyncStorage.getItem("userId");
 
       const [myPodsRes, witnessPodsRes] = await Promise.all([
-        fetch(CommitmentPodEndpoints.MY_PODS, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(CommitmentPodEndpoints.WITNESS, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(CommitmentPodEndpoints.MY_PODS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(CommitmentPodEndpoints.WITNESS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       ]);
-
 
       const adminFormatted = (myPodsRes?.success ? myPodsRes.pods || [] : [])
         .filter(pod => pod.active !== false)
         .map(pod => ({
-          id: pod._id,
-          chatId: pod._id,
-          name: pod.podName || `${pod.customType} Pod`,
-          avatar: null,
-          message: `${pod.witnesses?.length || 0} witnesses · ${pod.TimePeriod} days`,
-          time: fmtDate(pod.updatedAt || pod.createdAt),
-          unread: 0,
-          type: 'pod',
+          id:        pod._id,
+          chatId:    pod._id,
+          name:      pod.podName || `${pod.customType} Pod`,
+          avatar:    null,
+          message:   `${pod.witnesses?.length || 0} witnesses · ${pod.TimePeriod} days`,
+          time:      fmtDate(pod.updatedAt || pod.createdAt),
+          unread:    0,
+          type:      'pod',
           podStatus: 'admin',
-          sortDate: new Date(pod.updatedAt || pod.createdAt),
+          sortDate:  new Date(pod.updatedAt || pod.createdAt),
         }));
 
       const witnessFormatted = (witnessPodsRes?.success ? witnessPodsRes.pods || [] : [])
         .filter(pod => {
-          if (pod.active === false) return false;  // ← add this first
+          if (pod.active === false) return false;
           const myEntry = pod.witnesses?.find(w => {
             const wId = w?.user?._id || w?.user?.id || w?.user;
             return wId?.toString() === userId?.toString();
@@ -124,18 +155,18 @@ const ChatListScreen = () => {
           });
           const isPending = myEntry?.status === 'pending';
           return {
-            id: pod._id,
-            chatId: pod._id,
-            name: pod.podName || `${pod.customType} Pod`,
-            avatar: null,
-            message: isPending
+            id:        pod._id,
+            chatId:    pod._id,
+            name:      pod.podName || `${pod.customType} Pod`,
+            avatar:    null,
+            message:   isPending
               ? 'You have a pending invite'
               : `${pod.witnesses?.length || 0} witnesses · ${pod.TimePeriod} days`,
-            time: fmtDate(pod.updatedAt || pod.createdAt),
-            unread: isPending ? 1 : 0,
-            type: 'pod',
+            time:      fmtDate(pod.updatedAt || pod.createdAt),
+            unread:    isPending ? 1 : 0,
+            type:      'pod',
             podStatus: isPending ? 'pending' : 'accepted',
-            sortDate: new Date(pod.updatedAt || pod.createdAt),
+            sortDate:  new Date(pod.updatedAt || pod.createdAt),
           };
         });
 
@@ -145,26 +176,30 @@ const ChatListScreen = () => {
         seen.add(pod.id);
         return true;
       });
-      setPods(merged);
 
-      storage.set('pods', JSON.stringify(merged));
-    } catch (err) { console.error("loadPods:", err); }
+      setPods(merged);
+      writeCache(CACHE_PODS, merged);
+    } catch (err) {
+      console.warn('loadPods offline, showing cache:', err.message);
+    }
   };
 
+  // ── Pull-to-refresh ─────────────────────────────────────────────────────────
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadAll();
+    await Promise.all([loadConnections(), loadPods()]);
     setRefreshing(false);
   }, []);
 
+  // ── Derived list ────────────────────────────────────────────────────────────
   const getCombined = () => {
     let list =
       activeFilter === 'Witness' ? [...connections] :
-        activeFilter === 'Pods' ? [...pods] :
-          [...connections, ...pods];
+      activeFilter === 'Pods'    ? [...pods]        :
+                                   [...connections, ...pods];
     if (searchQuery)
       list = list.filter(i => i.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-    return list.sort((a, b) => b.sortDate - a.sortDate);
+    return list.sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
   };
 
   const handlePress = item => {
@@ -179,6 +214,7 @@ const ChatListScreen = () => {
     }
   };
 
+  // ── Render item ─────────────────────────────────────────────────────────────
   const renderItem = ({ item }) => (
     <TouchableOpacity style={s.row} onPress={() => handlePress(item)} activeOpacity={0.75}>
 
@@ -227,12 +263,14 @@ const ChatListScreen = () => {
     </TouchableOpacity>
   );
 
+  // ── Full-screen loader (cold start, no cache) ───────────────────────────────
   if (loading) return (
     <View style={[s.wrap, s.center]}>
       <ActivityIndicator size="large" color={T.text} />
     </View>
   );
 
+  // ── UI ──────────────────────────────────────────────────────────────────────
   return (
     <View style={s.wrap}>
 
@@ -324,7 +362,6 @@ const s = StyleSheet.create({
   searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginBottom: 14, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 12 },
   searchInput: { flex: 1, fontSize: 14, color: T.text },
 
-  // Filters
   filterRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 8, marginBottom: 0 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border },
   filterChipOn: { backgroundColor: T.white, borderColor: T.white },
@@ -335,7 +372,6 @@ const s = StyleSheet.create({
 
   divider: { height: 1, backgroundColor: T.border, marginTop: 14 },
 
-  // Row
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20, backgroundColor: T.bg },
   rowSep: { height: 1, backgroundColor: T.border, marginLeft: 78 },
   avatarWrap: { marginRight: 14, position: 'relative' },
@@ -358,13 +394,11 @@ const s = StyleSheet.create({
   unreadBadge: { backgroundColor: T.white, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, marginLeft: 8 },
   unreadText: { color: T.black, fontSize: 10, fontWeight: '800' },
 
-  // Empty
   empty: { alignItems: 'center', marginTop: 72 },
   emptyIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { color: T.mid, fontSize: 17, fontWeight: '700', marginBottom: 6 },
   emptyDesc: { color: T.dim, fontSize: 13, textAlign: 'center', lineHeight: 18, paddingHorizontal: 40 },
 
-  // Bottom nav
   nav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: T.surface, borderTopWidth: 1, borderTopColor: T.border, paddingVertical: 10, paddingHorizontal: 20 },
   navBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 8 },
   navBtnText: { color: T.text, fontSize: 13, fontWeight: '600' },

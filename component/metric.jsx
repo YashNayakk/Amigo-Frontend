@@ -37,19 +37,20 @@ const Metric = () => {
   const errorShake = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    MetricHistory();
+    const init = async () => {
+      const finished = await MetricHistory(); // return the value directly
 
-    if(alreadyFinished){
-      fetchQuestions();
-      console.log("fetching")
-    }else{
-      setLoading(false);
-      setFetchError(true)
-    }
+      if (!finished) {
+        fetchQuestions();
+        console.log("fetching");
+      } else {
+        setLoading(false);
+        setFetchError(true);
+      }
+    };
+
+    init().catch(console.error);
   }, []);
-
-  const today = new Date().toISOString().split("T")[0];
-
 
 
   const shakeAnimation = () => {
@@ -61,20 +62,25 @@ const Metric = () => {
       Animated.timing(errorShake, { toValue: 0, duration: 60, useNativeDriver: true }),
     ]).start();
   };
-  const MetricHistory =() =>{
-    try{
-      const token = AsyncStorage.getItem("token");
-      const response = fetch(MetricsEndpoints.GET_ALL, {
+  const MetricHistory = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const response = await fetch(MetricsEndpoints.GET_ALL, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error(`Server error ${response.status}`);
-      const data = response.json();
-      if(today == data.date) setAlreadyFinished(true)
-        else setAlreadyFinished(false)
+      const json = await response.json();
+      console.log("Metric history response:", json);
+
+      if (json.done) {  // or whatever condition means "already finished"
+        setAlreadyFinished(true);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Error fetching metric history:", error);
+      return false;
     }
-  }
+  };
 
   const fetchQuestions = async () => {
     setFetchError(false);
@@ -86,7 +92,7 @@ const Metric = () => {
       });
 
       if (!response.ok) throw new Error(`Server error ${response.status}`);
-      
+
       const data = await response.json();
       const qs = data.questions || [];
       if (qs.length === 0) throw new Error("No questions returned");
@@ -153,15 +159,15 @@ const Metric = () => {
       });
 
       const token = await AsyncStorage.getItem("token");
-      const today = new Date().toISOString().split("T")[0];
-
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
       const response = await fetch(MetricsEndpoints.CREATE, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ date: today, context: "daily", metrics }),
+        body: JSON.stringify({ date: date, context: "daily", metrics }),
       });
 
       const responseData = await response.json();

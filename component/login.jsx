@@ -10,10 +10,13 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
-  StatusBar
+  StatusBar,
+  Image
 } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import AuthService from '../services/authService';
+import BootSplash from 'react-native-bootsplash';
+import SplashScreen from './splash';
 
 const Login = () => {
   const navigation = useNavigation();
@@ -24,9 +27,21 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [checkingAuth, setCheckingAuth] = useState(true);
+
   useEffect(() => {
-    UserLoginHai();
-  })
+    const init = async () => {
+      await BootSplash.hide({ fade: true });
+
+      await Promise.all([
+        UserLoginHai(),
+        await new Promise(resolve =>
+          setTimeout(resolve, 3000)),
+      ]);
+
+      setCheckingAuth(false);
+    }
+    init();
+  }, [])
 
   const UserLoginHai = async () => {
     try {
@@ -36,8 +51,6 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Error checking login status:', error);
-    } finally {
-      setCheckingAuth(false)
     }
   }
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -77,12 +90,12 @@ const Login = () => {
         const data = await AuthService.login(email, password);
         console.log('Login success:', data);
         ///if (data.success) {
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Tabs' },]
-            })
-          );
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Tabs' },]
+          })
+        );
         //}
       } else {
 
@@ -102,13 +115,7 @@ const Login = () => {
   };
 
   if (checkingAuth) {
-    return (
-      <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#4e0e0e" />
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <SplashScreen /> ;
   }
 
   return (
@@ -118,6 +125,10 @@ const Login = () => {
     >
       <View style={styles.content}>
         <View style={styles.header}>
+          <Image
+            style={styles.Icon}
+            source={require("../Images/mascoti.png")}
+          />
           <Text style={styles.title}>Amigo</Text>
           <Text style={styles.subtitle}>
             {isLogin ? 'Welcome back!' : 'Create your account'}
@@ -207,7 +218,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#000000',
   },
   loadingText: {
     marginTop: 15,
@@ -223,6 +234,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 48,
     alignItems: 'center',
+  },
+  Icon: {
+    resizeMode: "contain",
+    width: 140,
+    height: 140,
   },
   title: {
     fontSize: 48,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Dimensions, Image, Alert, Modal, TextInput,
@@ -28,10 +28,18 @@ const T = {
   black: "#000000",
 };
 
+// FIX 1: strip any trailing slash from BASE_URL once, then always use a
+// leading slash on the path — prevents the double-slash that breaks Android.
+const BASE = (BASE_URL || "").replace(/\/+$/, "");
+
 const resolveImageUri = (path) => {
-  if (!path) return null;
+  if (!path || typeof path !== "string" || path.trim() === "") return null;
+  // Already an absolute URL (http/https) — use as-is
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  return `${BASE_URL}${path}`;
+  // Relative path from the server — prepend the clean base
+  // Ensure exactly one slash between BASE and path
+  const separator = path.startsWith("/") ? "" : "/";
+  return `${BASE}${separator}${path}`;
 };
 
 const ROLES = [
@@ -52,6 +60,35 @@ const formatDate = (str) => {
   });
 };
 
+// ── FIX 2: Avatar component with proper error state ──────────────────────────
+// Keeps its own `hasError` flag so a broken URL falls back to the initial
+// instead of showing a blank square.
+const Avatar = ({ uri, initial, style, initialStyle }) => {
+  const [hasError, setHasError] = useState(false);
+
+  // Reset error when uri changes (e.g. after a successful upload)
+  useEffect(() => { setHasError(false); }, [uri]);
+
+  if (uri && !hasError) {
+    return (
+      <Image
+        source={{ uri }}
+        style={style}
+        resizeMode="cover"
+        onError={() => {
+          console.warn("Avatar failed to load:", uri);
+          setHasError(true);
+        }}
+      />
+    );
+  }
+
+  return (
+    <View style={[style, s.avatarFallback]}>
+      <Text style={initialStyle}>{initial}</Text>
+    </View>
+  );
+};
 
 const SectionLabel = ({ children }) => (
   <View style={sl.wrap}>
@@ -96,7 +133,7 @@ const StatCol = ({ value, label, divider }) => (
   </View>
 );
 const sc = StyleSheet.create({
-  outer: { flexDirection: "row", flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 14, },
+  outer: { flexDirection: "row", flex: 1, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 14 },
   inner: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 16, gap: 24 },
   val: { color: T.text, fontSize: 20, fontWeight: "900", letterSpacing: -0.8, marginBottom: 4 },
   label: { color: T.dim, fontSize: 8, fontWeight: "700", letterSpacing: 1.8 },
@@ -126,7 +163,6 @@ const Profile = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Token expired or invalid — go to login immediately
       if (res.status === 401) {
         await AuthService.logout();
         navigation.replace("Login");
@@ -137,9 +173,8 @@ const Profile = () => {
       if (!ct.includes("application/json")) throw new Error("Non-JSON response");
 
       const json = await res.json();
-      console.log("Updated user:", json.data.profilePicture);
       if (res.ok && json.success) {
-        await AsyncStorage.setItem("user", JSON.stringify(json.data)); // keep cache fresh
+        await AsyncStorage.setItem("user", JSON.stringify(json.data));
         applyUser(json.data);
       } else {
         throw new Error(json.message || "Failed");
@@ -147,10 +182,7 @@ const Profile = () => {
     } catch (err) {
       console.error("loadProfile:", err);
       const cached = await AsyncStorage.getItem("user");
-      if (cached) {
-        applyUser(JSON.parse(cached));
-      }
-      // If no cache either, user stays null — render a fallback below
+      if (cached) applyUser(JSON.parse(cached));
     } finally {
       setLoading(false);
     }
@@ -162,7 +194,14 @@ const Profile = () => {
     setEditUserName(u.userName || "");
     setEditBio(u.bio || "");
     setEditRole(u.role || "other");
+  };
 
+  const openEditModal = () => {
+    // FIX 3: always clear selectedImage when opening the modal so the picker
+    // preview starts fresh — previously a stale local file:// URI from a prior
+    // session could persist and hide the current server-side profile picture.
+    setSelectedImage(null);
+    setModalVisible(true);
   };
 
   const requestPermission = async () => {
@@ -189,7 +228,6 @@ const Profile = () => {
     if (result.assets?.length) setSelectedImage(result.assets[0].uri);
   };
 
-
   const handleSave = async () => {
     setUploading(true);
     try {
@@ -213,7 +251,6 @@ const Profile = () => {
       const res = await fetch(UserEndpoints.UPDATE(userId), {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
-        // Don't set Content-Type manually — fetch sets it with boundary for FormData
         body: form,
       });
 
@@ -221,8 +258,11 @@ const Profile = () => {
       if (res.ok && json.success) {
         await AsyncStorage.setItem("user", JSON.stringify(json.data));
         applyUser(json.data);
-        setModalVisible(false);
+        // FIX 4: clear selectedImage AFTER saving so the main screen immediately
+        // shows the fresh server URL (resolved via resolveImageUri) rather than
+        // keeping the stale local file:// URI in state.
         setSelectedImage(null);
+        setModalVisible(false);
       } else {
         Alert.alert("Error", json.message || "Failed to update profile");
       }
@@ -276,9 +316,17 @@ const Profile = () => {
     );
   }
 
-  const avatarUri = resolveImageUri(user?.profilePicture);
+  // Strip /api suffix to get the server root for static files
+  const BASE = (BASE_URL || "").replace(/\/+$/, "").replace(/\/api$/, "");
+
+  const resolveImageUri = (path) => {
+    if (!path || typeof path !== "string" || path.trim() === "") return null;
+    if (path.startsWith("http://") || path.startsWith("https://")) return path;
+    const separator = path.startsWith("/") ? "" : "/";
+    return `${BASE}${separator}${path}`;
+  };
   const initial = (user?.name || "?").charAt(0).toUpperCase();
-  const isOffline = !user;
+  const avatarUri = resolveImageUri(user?.profilePicture);
   return (
     <SafeAreaView style={s.wrap} edges={["top"]}>
       <StatusBar barStyle="light-content" />
@@ -292,22 +340,19 @@ const Profile = () => {
           <View style={s.avatarSection}>
             <TouchableOpacity
               style={s.avatarOuter}
-              onPress={() => { setSelectedImage(null); setModalVisible(true); }}
+              onPress={openEditModal}
               activeOpacity={0.85}
             >
-              {/* Outer decorative ring */}
               <View style={s.avatarRingOuter} />
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={s.avatar} resizeMode="cover" />
-              ) : (
-                <View style={[s.avatar, s.avatarFallback]}>
-                  <Text style={s.avatarInitial}>{initial}</Text>
-                </View>
-              )}
-
+              {/* FIX 6: use the Avatar component — handles load errors gracefully */}
+              <Avatar
+                uri={avatarUri}
+                initial={initial}
+                style={s.avatar}
+                initialStyle={s.avatarInitial}
+              />
             </TouchableOpacity>
 
-            {/* Stats to the right of avatar — Instagram DNA */}
             <View style={s.heroStats}>
               <StatCol value={user?.WitnessCount || 0} label="WITNESSES" divider />
               <View style={s.rolePill}>
@@ -316,43 +361,30 @@ const Profile = () => {
               </View>
             </View>
           </View>
-        
 
-          {/* Name + role pill */}
           <View style={s.nameBlock}>
             <Text style={s.heroName}>{user?.name || "User"}</Text>
-
           </View>
 
-          {/* Bio */}
           {user?.bio ? (
             <Text style={s.heroBio}>{user.bio}</Text>
           ) : (
-            <TouchableOpacity
-              onPress={() => { setSelectedImage(null); setModalVisible(true); }}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity onPress={openEditModal} activeOpacity={0.7}>
               <Text style={s.heroBioEmpty}>+ Add a bio</Text>
             </TouchableOpacity>
           )}
 
-          {/* Joined row */}
           <View style={s.joinedRow}>
             <Icon name="calendar-outline" size={12} color={T.dim} />
             <Text style={s.joinedText}>Member since {formatDate(user?.createdAt)}</Text>
           </View>
 
-          {/* Edit button — full width, below bio */}
-          <TouchableOpacity
-            style={s.editBtn}
-            onPress={() => { setSelectedImage(null); setModalVisible(true); }}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={s.editBtn} onPress={openEditModal} activeOpacity={0.85}>
             <Icon name="create-outline" size={14} color={T.text} />
             <Text style={s.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
-        {/* ── Divider ── */}
+
         <View style={s.sectionDivider} />
 
         <View style={s.tilesSection}>
@@ -378,12 +410,6 @@ const Profile = () => {
         <View style={s.sections}>
           <SectionLabel>ACCOUNT</SectionLabel>
           <View style={s.card}>
-            {isOffline && (
-              <View style={s.offlineBanner}>
-                <Icon name="cloud-offline-outline" size={13} color={T.dim} />
-                <Text style={s.offlineText}>Showing cached profile</Text>
-              </View>
-            )}
             <ActionRow icon="help-circle-outline" label="Help & Support"
               onPress={() => Alert.alert("Help", "Contact support@app.com")} />
             <ActionRow icon="log-out-outline" label="Log Out"
@@ -404,7 +430,6 @@ const Profile = () => {
             <View style={s.sheet}>
               <View style={s.sheetPill} />
 
-              {/* Header */}
               <View style={s.sheetHeader}>
                 <View>
                   <Text style={s.eyebrow}>PROFILE</Text>
@@ -420,29 +445,30 @@ const Profile = () => {
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingBottom: 16 }}
               >
-                {/* Avatar picker */}
+                {/* Avatar picker — shows selectedImage (local) if picked,
+                    otherwise shows the current server-side avatarUri */}
                 <View style={s.pickerRow}>
                   <TouchableOpacity style={s.pickerWrap} onPress={pickImage} activeOpacity={0.8}>
-                    {selectedImage || avatarUri ? (
-                      <Image source={{ uri: selectedImage || avatarUri }} style={s.pickerImg} />
-                    ) : (
-                      <View style={[s.pickerImg, s.pickerFallback]}>
-                        <Text style={s.pickerInitial}>{initial}</Text>
-                      </View>
-                    )}
+                    <Avatar
+                      uri={selectedImage || avatarUri}
+                      initial={initial}
+                      style={s.pickerImg}
+                      initialStyle={s.pickerInitial}
+                    />
                     <View style={s.pickerBadge}>
                       <Icon name="camera" size={12} color={T.black} />
                     </View>
                   </TouchableOpacity>
                   <View style={{ flex: 1 }}>
                     <Text style={s.pickerLabel}>PROFILE PHOTO</Text>
-                    <Text style={s.pickerHint}>Tap to change your photo</Text>
+                    <Text style={s.pickerHint}>
+                      {selectedImage ? "New photo selected" : "Tap to change your photo"}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={s.fieldDivider} />
 
-                {/* Name */}
                 <View style={s.fieldBox}>
                   <Text style={s.fieldLabel}>DISPLAY NAME</Text>
                   <TextInput
@@ -454,7 +480,6 @@ const Profile = () => {
                   />
                 </View>
 
-                {/* Username */}
                 <View style={s.fieldBox}>
                   <Text style={s.fieldLabel}>USERNAME</Text>
                   <View style={s.fieldRow}>
@@ -470,7 +495,6 @@ const Profile = () => {
                   </View>
                 </View>
 
-                {/* Bio */}
                 <View style={s.fieldBox}>
                   <Text style={s.fieldLabel}>BIO <Text style={{ color: T.dim }}>— {editBio.length}/200</Text></Text>
                   <TextInput
@@ -484,7 +508,6 @@ const Profile = () => {
                   />
                 </View>
 
-                {/* Role */}
                 <View style={s.fieldBox}>
                   <Text style={s.fieldLabel}>ROLE</Text>
                   <View style={s.roleGrid}>
@@ -509,7 +532,6 @@ const Profile = () => {
 
               </ScrollView>
 
-              {/* Bottom bar */}
               <View style={s.bar}>
                 <TouchableOpacity style={s.barBack} onPress={() => setModalVisible(false)}>
                   <Icon name="arrow-back" size={17} color={T.mid} />
@@ -535,13 +557,12 @@ const Profile = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-    </SafeAreaView >
+    </SafeAreaView>
   );
 };
 
 export default Profile;
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const TILE = (width - 40 - 10) / 2; // two-col tile width
 
 const s = StyleSheet.create({
