@@ -8,30 +8,59 @@ import {
   FlatList,
   Animated,
   Image,
+  ActivityIndicator,
   StatusBar,
 } from "react-native";
 import { DiscoveryEndpoints, WitnessEndpoints } from "../services/apis";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
+import AuthService from "../services/authService";
+import { BASE_URL } from "react-native-dotenv"
 
 const { width } = Dimensions.get("window");
 
 const T = {
-  bg:      "#080808",
+  bg: "#080808",
   surface: "#101010",
-  raised:  "#181818",
-  border:  "#1e1e1e",
-  hi:      "#2a2a2a",
-  text:    "#efefef",
-  mid:     "#888",
-  dim:     "#444",
-  accent:  "#7CFF9B",
-  blue:    "#5B9EFF",
-  yellow:  "#FFD97C",
-  red:     "#FF7C7C",
-  white:   "#ffffff",
-  black:   "#000000",
+  raised: "#181818",
+  border: "#1e1e1e",
+  hi: "#2a2a2a",
+  text: "#efefef",
+  mid: "#888",
+  dim: "#444",
+  accent: "#7CFF9B",
+  blue: "#5B9EFF",
+  yellow: "#FFD97C",
+  red: "#FF7C7C",
+  white: "#ffffff",
+  black: "#000000",
+};
+
+const SERVER_BASE = (BASE_URL || "")
+  .replace(/\/+$/, "")       // remove trailing slashes
+  .replace(/\/api$/, "");    // remove /api suffix to get server root
+
+const resolveImageUri = (path) => {
+  if (!path || typeof path !== "string" || path.trim() === "") return null;
+
+  // Already absolute URL → use as-is
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    console.log("[Avatar] Using absolute URL:", path);
+    return path;
+  }
+
+  // Local file URI from image picker → use as-is
+  if (path.startsWith("file://") || path.startsWith("content://")) {
+    console.log("[Avatar] Using local URI:", path);
+    return path;
+  }
+
+  // Relative server path → prepend server base
+  const separator = path.startsWith("/") ? "" : "/";
+  const resolved = `${SERVER_BASE}${separator}${path}`;
+  console.log("[Avatar] Resolved relative path:", path, "→", resolved);
+  return resolved;
 };
 
 const CARD_W = width - 32;
@@ -40,15 +69,15 @@ const CARD_H = 240;
 
 const momentumMeta = (m) => {
   const v = parseFloat(m) || 0;
-  if (v >  0.5) return { label: "Rising",   color: T.accent  };
-  if (v >  0)   return { label: "Steady",   color: T.yellow  };
-  if (v < -0.5) return { label: "Dipping",  color: T.red     };
-  return               { label: "Neutral",  color: T.mid     };
+  if (v > 0.5) return { label: "Rising", color: T.accent };
+  if (v > 0) return { label: "Steady", color: T.yellow };
+  if (v < -0.5) return { label: "Dipping", color: T.red };
+  return { label: "Neutral", color: T.mid };
 };
 
 const scoreColor = (s) =>
-  s >= 4   ? T.accent :
-  s >= 2.5 ? T.yellow : T.blue;
+  s >= 4 ? T.accent :
+    s >= 2.5 ? T.yellow : T.blue;
 
 const Bar = ({ fill, color = T.accent }) => (
   <View style={bar.track}>
@@ -57,7 +86,7 @@ const Bar = ({ fill, color = T.accent }) => (
 );
 const bar = StyleSheet.create({
   track: { height: 2, backgroundColor: T.hi, borderRadius: 1, overflow: "hidden", flex: 1 },
-  fill:  { height: "100%", borderRadius: 1 },
+  fill: { height: "100%", borderRadius: 1 },
 });
 
 const ScoreCircle = ({ score }) => {
@@ -66,10 +95,10 @@ const ScoreCircle = ({ score }) => {
     <View style={sc.wrap}>
       <View style={[sc.ring, { borderColor: T.hi }]} />
       <View style={[sc.ring, sc.arc, {
-        borderTopColor:    color,
-        borderRightColor:  score > 1.25 ? color : "transparent",
-        borderBottomColor: score > 2.5  ? color : "transparent",
-        borderLeftColor:   score > 3.75 ? color : "transparent",
+        borderTopColor: color,
+        borderRightColor: score > 1.25 ? color : "transparent",
+        borderBottomColor: score > 2.5 ? color : "transparent",
+        borderLeftColor: score > 3.75 ? color : "transparent",
       }]} />
       <Text style={[sc.num, { color }]}>{score.toFixed(1)}</Text>
     </View>
@@ -78,15 +107,15 @@ const ScoreCircle = ({ score }) => {
 const sc = StyleSheet.create({
   wrap: { width: 68, height: 68, alignItems: "center", justifyContent: "center" },
   ring: { position: "absolute", width: 68, height: 68, borderRadius: 34, borderWidth: 3, borderColor: T.hi },
-  arc:  { borderColor: "transparent", transform: [{ rotate: "-90deg" }] },
-  num:  { fontSize: 18, fontWeight: "900", letterSpacing: -0.5, marginTop: 2 },
-  cap:  { fontSize: 9, color: T.dim, fontWeight: "600", marginTop: -2 },
+  arc: { borderColor: "transparent", transform: [{ rotate: "-90deg" }] },
+  num: { fontSize: 18, fontWeight: "900", letterSpacing: -0.5, marginTop: 2 },
+  cap: { fontSize: 9, color: T.dim, fontWeight: "600", marginTop: -2 },
 });
 
 const FlipCard = ({ data, index }) => {
-  const [flipped,   setFlipped]   = useState(false);
+  const [flipped, setFlipped] = useState(false);
   const [requested, setRequested] = useState(false);
-  const anim   = useState(new Animated.Value(0))[0];
+  const anim = useState(new Animated.Value(0))[0];
   const fadeIn = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
@@ -106,7 +135,7 @@ const FlipCard = ({ data, index }) => {
     if (requested) return;
     try {
       const token = await AsyncStorage.getItem("token");
-      await fetch(WitnessEndpoints.SEND_REQUEST, {
+      await AuthService.authFetch(WitnessEndpoints.SEND_REQUEST, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ targetId: data?._id }),
@@ -115,24 +144,77 @@ const FlipCard = ({ data, index }) => {
     } catch (e) { console.error(e); }
   };
 
-  const fRot = anim.interpolate({ inputRange:[0,1], outputRange:["0deg","180deg"] });
-  const bRot = anim.interpolate({ inputRange:[0,1], outputRange:["180deg","360deg"] });
-  const fOp  = anim.interpolate({ inputRange:[0,0.49,0.5,1], outputRange:[1,1,0,0] });
-  const bOp  = anim.interpolate({ inputRange:[0,0.49,0.5,1], outputRange:[0,0,1,1] });
+  const fRot = anim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
+  const bRot = anim.interpolate({ inputRange: [0, 1], outputRange: ["180deg", "360deg"] });
+  const fOp = anim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] });
+  const bOp = anim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] });
 
-  const perf         = data?.performance || {};
-  const score        = parseFloat(perf.score        || 0);
-  const consistency  = parseInt (perf.consistency   || 0);   // 0-100 %
-  const streak       = parseInt (perf.currentStreak || 0);
-  const bestStreak   = parseInt (perf.bestStreak    || 0);
-  const habitScore   = parseFloat(perf.habitScore   || 0);   // 0-5
-  const metricScore  = parseFloat(perf.metricScore  || 0);   // 0-5
-  const habitCount   = parseInt (data?.habitCount   || perf.habitCount || 0);
-  const focusSessions= parseInt (perf.focus?.totalSessions || data?.focusSessions || 0);
-  const focusMins    = Math.round((perf.focus?.totalSecs || 0) / 60);
-  const mom          = momentumMeta(perf.momentum);
+  const perf = data?.performance || {};
+  const score = parseFloat(perf.score || 0);
+  const consistency = parseInt(perf.consistency || 0);   // 0-100 %
+  const streak = parseInt(perf.currentStreak || 0);
+  const bestStreak = parseInt(perf.bestStreak || 0);
+  const habitScore = parseFloat(perf.habitScore || 0);   // 0-5
+  const metricScore = parseFloat(perf.metricScore || 0);   // 0-5
+  const habitCount = parseInt(data?.habitCount || perf.habitCount || 0);
+  const focusSessions = parseInt(perf.focus?.totalSessions || data?.focusSessions || 0);
+  const focusMins = Math.round((perf.focus?.totalSecs || 0) / 60);
+  const mom = momentumMeta(perf.momentum);
 
-  const initial   = data?.name?.charAt(0)?.toUpperCase() || "?";
+   const Avatar = ({ uri, initial, style, initialStyle }) => {
+      const [hasError, setHasError] = useState(false);
+      const [isLoading, setIsLoading] = useState(true);
+  
+      // Reset states when URI changes
+      useEffect(() => {
+        setHasError(false);
+        setIsLoading(true);
+        console.log("[Avatar] URI changed to:", uri);
+      }, [uri]);
+  
+      if (uri && !hasError) {
+        return (
+          <View style={style}>
+            <Image
+              source={{
+                uri,
+                // FIX: cache headers help with emulator image loading
+                headers: { Pragma: "no-cache" },
+              }}
+              style={[style, { position: 'absolute', top: 0, left: 0 }]}
+              resizeMode="cover"
+              onLoad={() => {
+                console.log("[Avatar] Image loaded successfully:", uri);
+                setIsLoading(false);
+              }}
+              onError={(e) => {
+                console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
+                setHasError(true);
+                setIsLoading(false);
+              }}
+            />
+            {/* Show initial while loading */}
+            {isLoading && (
+              <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
+                <ActivityIndicator size="small" color={T.mid} />
+              </View>
+            )}
+          </View>
+        );
+      }
+  
+      // Fallback: show initial letter
+      return (
+        <View style={[style, s.avatarFallback]}>
+          <Text style={initialStyle}>{initial || "?"}</Text>
+        </View>
+      );
+    };
+
+  const initial = (data?.name || "?").charAt(0).toUpperCase();
+  const avatarUri = resolveImageUri(data?.profilePicture);
+
+  console.log("[Profile] avatarUri:", avatarUri);
   const isWitness = data?.role === "Witness";
 
   const focusStr = focusMins >= 60
@@ -142,7 +224,7 @@ const FlipCard = ({ data, index }) => {
   return (
     <Animated.View style={[s.cardOuter, {
       opacity: fadeIn,
-      transform: [{ translateY: fadeIn.interpolate({ inputRange:[0,1], outputRange:[20,0] }) }],
+      transform: [{ translateY: fadeIn.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
     }]}>
 
       <Animated.View style={[s.card, {
@@ -154,7 +236,12 @@ const FlipCard = ({ data, index }) => {
           <View style={s.left}>
             <View style={s.avatarWrap}>
               {data?.profilePicture
-                ? <Image source={{ uri: data.profilePicture }} style={s.avatar} resizeMode="cover" />
+                ? <Avatar
+                  uri={avatarUri}
+                  initial={initial}
+                  style={s.avatar}
+                  initialStyle={s.avatarInitial}
+                />
                 : <View style={[s.avatar, s.avatarFb]}><Text style={s.avatarLetter}>{initial}</Text></View>
               }
               {/* Consistency-driven status dot */}
@@ -214,9 +301,9 @@ const FlipCard = ({ data, index }) => {
           {/* LEFT */}
           <View style={s.left}>
             {[
-              { val: score.toFixed(1), lbl: "score"       },
+              { val: score.toFixed(1), lbl: "score" },
               { val: `${consistency}%`, lbl: "consistency" },
-              { val: `${streak}d`,      lbl: "streak"      },
+              { val: `${streak}d`, lbl: "streak" },
             ].map((st, i) => (
               <View key={i} style={s.backStat}>
                 <Text style={s.backStatNum}>{st.val}</Text>
@@ -293,8 +380,8 @@ const FlipCard = ({ data, index }) => {
 };
 
 const ShowcaseScreen = () => {
-  const navigation          = useNavigation();
-  const [data,    setData]  = useState([]);
+  const navigation = useNavigation();
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { load(); }, []);
@@ -302,15 +389,66 @@ const ShowcaseScreen = () => {
   const load = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
-      const res   = await fetch(DiscoveryEndpoints.GET_ALL, {
+      const res = await AuthService.authFetch(DiscoveryEndpoints.GET_ALL, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      
-      console.log("json",json)
+      console.log("json", json)
+
+      console.log("json", json)
       setData(Array.isArray(json) ? json : []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
+  };
+
+  const Avatar = ({ uri, initial, style, initialStyle }) => {
+    const [hasError, setHasError] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Reset states when URI changes
+    useEffect(() => {
+      setHasError(false);
+      setIsLoading(true);
+      console.log("[Avatar] URI changed to:", uri);
+    }, [uri]);
+
+    if (uri && !hasError) {
+      return (
+        <View style={style}>
+          <Image
+            source={{
+              uri,
+              // FIX: cache headers help with emulator image loading
+              headers: { Pragma: "no-cache" },
+            }}
+            style={[style, { position: 'absolute', top: 0, left: 0 }]}
+            resizeMode="cover"
+            onLoad={() => {
+              console.log("[Avatar] Image loaded successfully:", uri);
+              setIsLoading(false);
+            }}
+            onError={(e) => {
+              console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
+              setHasError(true);
+              setIsLoading(false);
+            }}
+          />
+          {/* Show initial while loading */}
+          {isLoading && (
+            <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
+              <ActivityIndicator size="small" color={T.mid} />
+            </View>
+          )}
+        </View>
+      );
+    }
+
+    // Fallback: show initial letter
+    return (
+      <View style={[style, s.avatarFallback]}>
+        <Text style={initialStyle}>{initial || "?"}</Text>
+      </View>
+    );
   };
 
   return (
@@ -330,7 +468,7 @@ const ShowcaseScreen = () => {
       {loading ? (
         <View style={s.loadWrap}>
           <View style={s.dots}>
-            {[0,1,2].map(i => <View key={i} style={[s.dotPulse, { opacity: 0.3 + i * 0.25 }]} />)}
+            {[0, 1, 2].map(i => <View key={i} style={[s.dotPulse, { opacity: 0.3 + i * 0.25 }]} />)}
           </View>
           <Text style={s.loadTxt}>Loading profiles…</Text>
         </View>
@@ -361,100 +499,102 @@ export default ShowcaseScreen;
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: T.bg },
 
-  header:      { flexDirection:"row", alignItems:"center", paddingHorizontal:20, paddingTop:52, paddingBottom:16, borderBottomWidth:1, borderBottomColor:T.border },
-  iconBtn:     { width:34, height:34, borderRadius:10, backgroundColor:T.raised, borderWidth:1, borderColor:T.border, alignItems:"center", justifyContent:"center" },
-  eyebrow:     { color:T.dim, fontSize:9, fontWeight:"700", letterSpacing:2, marginBottom:2 },
-  headerTitle: { color:T.text, fontSize:22, fontWeight:"900", letterSpacing:-0.5 },
-  countChip:   { backgroundColor:T.raised, borderWidth:1, borderColor:T.border, paddingHorizontal:12, paddingVertical:6, borderRadius:20 },
-  countTxt:    { color:T.mid, fontSize:12, fontWeight:"700" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: T.border },
+  iconBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: "center", justifyContent: "center" },
+  eyebrow: { color: T.dim, fontSize: 9, fontWeight: "700", letterSpacing: 2, marginBottom: 2 },
+  headerTitle: { color: T.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  countChip: { backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  countTxt: { color: T.mid, fontSize: 12, fontWeight: "700" },
 
-  list: { paddingHorizontal:16, paddingTop:20, paddingBottom:80 },
+  list: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 80 },
 
   // ── Card ──
   cardOuter: { height: CARD_H, marginBottom: 20 },
   card: {
-    position:"absolute", width:CARD_W, height:CARD_H,
-    backgroundColor:T.surface, borderRadius:20,
-    borderWidth:1, borderColor:T.border,
-    backfaceVisibility:"hidden", overflow:"hidden",
-    shadowColor:"#000", shadowOffset:{ width:0, height:8 },
-    shadowOpacity:0.5, shadowRadius:20, elevation:12,
+    position: "absolute", width: CARD_W, height: CARD_H,
+    backgroundColor: T.surface, borderRadius: 20,
+    borderWidth: 1, borderColor: T.border,
+    backfaceVisibility: "hidden", overflow: "hidden",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5, shadowRadius: 20, elevation: 12,
   },
   cardAbs: {},
-  inner: { flex:1, flexDirection:"row" },
+  inner: { flex: 1, flexDirection: "row" },
 
   // ── Left ──
   left: {
-    width:130, paddingVertical:18, paddingHorizontal:14,
-    alignItems:"center", justifyContent:"center",
-    backgroundColor:T.raised, borderRightWidth:1, borderRightColor:T.border,
+    width: 130, paddingVertical: 18, paddingHorizontal: 14,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: T.raised, borderRightWidth: 1, borderRightColor: T.border,
   },
-  avatarWrap:   { position:"relative", marginBottom:10 },
-  avatar:       { width:58, height:58, borderRadius:29, overflow:"hidden" },
-  avatarFb:     { backgroundColor:T.hi, alignItems:"center", justifyContent:"center" },
-  avatarLetter: { color:T.mid, fontSize:22, fontWeight:"900" },
-  dot:          { position:"absolute", bottom:1, right:1, width:11, height:11, borderRadius:5.5, borderWidth:2, borderColor:T.raised },
+  avatarWrap: { position: "relative", marginBottom: 10 },
+  avatarFallback: { backgroundColor: T.raised, alignItems: "center", justifyContent: "center" },
+  avatarInitial: { fontSize: 32, fontWeight: "900", color: T.mid, letterSpacing: -1 },
+  avatar: { width: 62, height: 62, borderRadius: 29, overflow: "hidden" },
+  avatarFb: { backgroundColor: T.hi, alignItems: "center", justifyContent: "center" },
+  avatarLetter: { color: T.mid, fontSize: 22, fontWeight: "900" },
+  dot: { position: "absolute", bottom: 1, right: 1, width: 11, height: 11, borderRadius: 5.5, borderWidth: 2, borderColor: T.raised },
 
-  name:       { color:T.text, fontSize:13, fontWeight:"800", letterSpacing:-0.2, textAlign:"center", marginBottom:3 },
-  role:       { color:T.dim, fontSize:9, fontWeight:"600", letterSpacing:1.2, textTransform:"uppercase", marginBottom:8 },
-  streakPill: { backgroundColor:T.hi, borderRadius:20, paddingHorizontal:9, paddingVertical:4, marginBottom:10 },
-  streakTxt:  { color:T.text, fontSize:11, fontWeight:"700" },
-  flipRow:    { flexDirection:"row", alignItems:"center", gap:4, marginTop:"auto" },
-  flipTxt:    { color:T.dim, fontSize:9, fontWeight:"500" },
+  name: { color: T.text, fontSize: 13, fontWeight: "800", letterSpacing: -0.2, textAlign: "center", marginBottom: 3 },
+  role: { color: T.dim, fontSize: 9, fontWeight: "600", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 },
+  streakPill: { backgroundColor: T.hi, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 4, marginBottom: 10 },
+  streakTxt: { color: T.text, fontSize: 11, fontWeight: "700" },
+  flipRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: "auto" },
+  flipTxt: { color: T.dim, fontSize: 9, fontWeight: "500" },
 
   // ── Dividers ──
-  vLine: { width:1, backgroundColor:T.border },
-  hLine: { height:1, backgroundColor:T.border, marginVertical:11, width:"100%" },
+  vLine: { width: 1, backgroundColor: T.border },
+  hLine: { height: 1, backgroundColor: T.border, marginVertical: 11, width: "100%" },
 
   // ── Right ──
-  right: { flex:1, paddingVertical:16, paddingHorizontal:16, justifyContent:"center" },
+  right: { flex: 1, paddingVertical: 16, paddingHorizontal: 16, justifyContent: "center" },
 
-  topRow:      { flexDirection:"row", alignItems:"center" },
-  momBadge:    { flexDirection:"row", alignItems:"center", gap:5, alignSelf:"flex-start", borderWidth:1, borderRadius:6, paddingHorizontal:7, paddingVertical:3, marginBottom:6 },
-  momDot:      { width:5, height:5, borderRadius:2.5 },
-  momTxt:      { fontSize:10, fontWeight:"700" },
-  consBig:     { color:T.text, fontSize:26, fontWeight:"900", letterSpacing:-1, lineHeight:30 },
-  consPct:     { fontSize:13, fontWeight:"700", color:T.mid },
-  consCaption: { color:T.dim, fontSize:9, fontWeight:"600", letterSpacing:1, textTransform:"uppercase" },
+  topRow: { flexDirection: "row", alignItems: "center" },
+  momBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, marginBottom: 6 },
+  momDot: { width: 5, height: 5, borderRadius: 2.5 },
+  momTxt: { fontSize: 10, fontWeight: "700" },
+  consBig: { color: T.text, fontSize: 26, fontWeight: "900", letterSpacing: -1, lineHeight: 30 },
+  consPct: { fontSize: 13, fontWeight: "700", color: T.mid },
+  consCaption: { color: T.dim, fontSize: 9, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" },
 
-  statRow:  { flexDirection:"row", alignItems:"center" },
-  statCell: { flex:1, alignItems:"center" },
-  statSep:  { width:1, height:22, backgroundColor:T.border },
-  statNum:  { color:T.text, fontSize:14, fontWeight:"800", letterSpacing:-0.3, marginBottom:2 },
-  statLbl:  { color:T.dim, fontSize:8, fontWeight:"600", letterSpacing:0.8, textTransform:"uppercase" },
+  statRow: { flexDirection: "row", alignItems: "center" },
+  statCell: { flex: 1, alignItems: "center" },
+  statSep: { width: 1, height: 22, backgroundColor: T.border },
+  statNum: { color: T.text, fontSize: 14, fontWeight: "800", letterSpacing: -0.3, marginBottom: 2 },
+  statLbl: { color: T.dim, fontSize: 8, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
 
   // ── Back left ──
-  backThumb:    { width:46, height:46, borderRadius:23, overflow:"hidden", marginBottom:8 },
-  backLetter:   { color:T.mid, fontSize:16, fontWeight:"900" },
-  backName:     { color:T.text, fontSize:12, fontWeight:"800", textAlign:"center", letterSpacing:-0.2 },
-  backStat:     { alignItems:"center", marginBottom:8 },
-  backStatNum:  { color:T.text, fontSize:16, fontWeight:"900", letterSpacing:-0.5 },
-  backStatLbl:  { color:T.dim, fontSize:8, fontWeight:"600", letterSpacing:1, textTransform:"uppercase", marginTop:1 },
+  backThumb: { width: 46, height: 46, borderRadius: 23, overflow: "hidden", marginBottom: 8 },
+  backLetter: { color: T.mid, fontSize: 16, fontWeight: "900" },
+  backName: { color: T.text, fontSize: 12, fontWeight: "800", textAlign: "center", letterSpacing: -0.2 },
+  backStat: { alignItems: "center", marginBottom: 8 },
+  backStatNum: { color: T.text, fontSize: 16, fontWeight: "900", letterSpacing: -0.5 },
+  backStatLbl: { color: T.dim, fontSize: 8, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase", marginTop: 1 },
 
   // ── Back right bars ──
   barBlock: {},
-  barHead:  { flexDirection:"row", alignItems:"center", marginBottom:5 },
-  barLbl:   { color:T.mid, fontSize:10, fontWeight:"500", flex:1 },
-  barVal:   { color:T.text, fontSize:11, fontWeight:"700" },
+  barHead: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
+  barLbl: { color: T.mid, fontSize: 10, fontWeight: "500", flex: 1 },
+  barVal: { color: T.text, fontSize: 11, fontWeight: "700" },
 
   // ── CTA ──
-  cta:       { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:7, paddingVertical:11, backgroundColor:T.white, borderRadius:12 },
-  ctaDone:   { backgroundColor:T.raised, borderWidth:1, borderColor:T.border },
-  ctaTxt:    { color:T.black, fontSize:12, fontWeight:"800" },
-  ctaTxtDone:{ color:T.mid },
+  cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11, backgroundColor: T.white, borderRadius: 12 },
+  ctaDone: { backgroundColor: T.raised, borderWidth: 1, borderColor: T.border },
+  ctaTxt: { color: T.black, fontSize: 12, fontWeight: "800" },
+  ctaTxtDone: { color: T.mid },
 
-  closeRow: { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:4 },
-  closeTxt: { color:T.dim, fontSize:9, fontWeight:"500" },
+  closeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  closeTxt: { color: T.dim, fontSize: 9, fontWeight: "500" },
 
   // ── Loading ──
-  loadWrap: { flex:1, alignItems:"center", justifyContent:"center", gap:12 },
-  dots:     { flexDirection:"row", gap:6 },
-  dotPulse: { width:6, height:6, borderRadius:3, backgroundColor:T.text },
-  loadTxt:  { color:T.dim, fontSize:12, fontWeight:"500" },
+  loadWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  dots: { flexDirection: "row", gap: 6 },
+  dotPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: T.text },
+  loadTxt: { color: T.dim, fontSize: 12, fontWeight: "500" },
 
   // ── Empty ──
-  empty:      { alignItems:"center", marginTop:80 },
-  emptyIcon:  { width:68, height:68, borderRadius:34, backgroundColor:T.raised, borderWidth:1, borderColor:T.border, alignItems:"center", justifyContent:"center", marginBottom:16 },
-  emptyTitle: { color:T.mid, fontSize:17, fontWeight:"700", marginBottom:6 },
-  emptyDesc:  { color:T.dim, fontSize:13, textAlign:"center", lineHeight:18, paddingHorizontal:40 },
+  empty: { alignItems: "center", marginTop: 80 },
+  emptyIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  emptyTitle: { color: T.mid, fontSize: 17, fontWeight: "700", marginBottom: 6 },
+  emptyDesc: { color: T.dim, fontSize: 13, textAlign: "center", lineHeight: 18, paddingHorizontal: 40 },
 });

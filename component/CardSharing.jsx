@@ -8,6 +8,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatEndpoints } from '../services/apis';
 import { getSocket } from '../services/SocketService';
+import AuthService from '../services/authService';
 
 const T = {
   bg: '#080808', surface: '#101010', raised: '#181818',
@@ -147,7 +148,7 @@ const CardSharingScreen = ({ route, navigation }) => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(ChatEndpoints.GET_WITNESS_CHAT(userId), {
+      const res = await AuthService.authFetch(ChatEndpoints.GET_WITNESS_CHAT(userId), {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
 
@@ -208,7 +209,7 @@ const CardSharingScreen = ({ route, navigation }) => {
   const sendViaHttp = async (currentChatId, cardData) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(ChatEndpoints.SEND_CARD(currentChatId), {
+      const res = await AuthService.authFetch(ChatEndpoints.SEND_CARD(currentChatId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(cardData),
@@ -222,7 +223,7 @@ const CardSharingScreen = ({ route, navigation }) => {
     } finally {
       setSending(false);
     }
-  };
+  }; 
 
   const handleCardSuccess = ({ card, stats }) => {
     setCards(prev => {

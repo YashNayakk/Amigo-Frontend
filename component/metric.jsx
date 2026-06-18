@@ -15,6 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import Slider from "@react-native-community/slider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MetricsEndpoints } from "../services/apis";
+import Authservice from "../services/authService";
 
 const { height, width } = Dimensions.get("window");
 
@@ -45,7 +46,7 @@ const Metric = () => {
         console.log("fetching");
       } else {
         setLoading(false);
-        setFetchError(true);
+        setAlreadyFinished(true)
       }
     };
 
@@ -65,14 +66,13 @@ const Metric = () => {
   const MetricHistory = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch(MetricsEndpoints.GET_ALL, {
+      const response = await Authservice.authFetch(MetricsEndpoints.GET_ALL, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await response.json();
       console.log("Metric history response:", json);
 
-      if (json.done) {  // or whatever condition means "already finished"
-        setAlreadyFinished(true);
+      if (json?.done) {  // or whatever condition means "already finished"
         return true;
       }
       return false;
@@ -87,7 +87,7 @@ const Metric = () => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch(MetricsEndpoints.GET_QUESTIONS, {
+      const response = await Authservice.authFetch(MetricsEndpoints.GET_QUESTIONS, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -106,7 +106,7 @@ const Metric = () => {
   };
 
   const handleScrollEnd = (e) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / height);
+    const index = Math.round(e.nativeEvent.contentOffset.x / width);
     setActiveIndex(index);
   };
 
@@ -161,7 +161,7 @@ const Metric = () => {
       const token = await AsyncStorage.getItem("token");
       const today = new Date();
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-      const response = await fetch(MetricsEndpoints.CREATE, {
+      const response = await Authservice.authFetch(MetricsEndpoints.CREATE, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -342,6 +342,22 @@ const Metric = () => {
     );
   }
 
+  if (alreadyFinished) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Image
+          source={require("../Images/mascotc.png")}
+          style={styles.mascotImage}
+          resizeMode="contain"
+        />
+        <Text style={styles.errorTitle}>You have recorded your answer</Text>
+        <Text style={styles.errorSubtitle}>
+          Come back tomorrow.
+        </Text>
+      </View>
+    );
+  }
+
   if (showSuccess) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -371,6 +387,8 @@ const Metric = () => {
         ref={flatListRef}
         data={questions}
         pagingEnabled
+        scrollEventThrottle={16}
+        horizontal
         showsVerticalScrollIndicator={false}
         scrollEnabled={true}
         keyExtractor={(item) => item.id}
@@ -534,9 +552,11 @@ const styles = StyleSheet.create({
   },
   // Emoji Input
   emojiContainer: {
-    flexDirection: "row",
+    flexDirection: "column",
     flexWrap: "wrap",
-    justifyContent: "center",
+    //alignItems:"center",
+    //alignSelf:"center",
+    alignContent:"center",
     gap: 16,
     marginTop: 20,
   },

@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WitnessEndpoints, CommitmentPodEndpoints } from '../services/apis';
 import { useNavigation } from '@react-navigation/native';
+import AuthService from '../services/authService';
 
 const { width } = Dimensions.get('window');
 
@@ -58,7 +59,7 @@ const CommitmentPod = () => {
   const loadConnections = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const res   = await fetch(WitnessEndpoints.GET_CONNECTIONS, {
+      const res   = await AuthService.authFetch(WitnessEndpoints.GET_CONNECTIONS, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
       if (res?.success) {
@@ -76,7 +77,7 @@ const CommitmentPod = () => {
     setCreating(true);
     try {
       const token = await AsyncStorage.getItem('token');
-      const res   = await fetch(CommitmentPodEndpoints.CREATE, {
+      const res   = await AuthService.authFetch(CommitmentPodEndpoints.CREATE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

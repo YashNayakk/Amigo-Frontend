@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HabitEndpoints } from '../services/apis';
+import AuthService from '../services/authService';
 
 const { width } = Dimensions.get('window');
 
@@ -148,7 +149,7 @@ export default function HabitsScreen() {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(HabitEndpoints.GET_ALL, {
+      const res = await AuthService.authFetch(HabitEndpoints.GET_ALL, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const  data = await res.json();
@@ -163,7 +164,7 @@ export default function HabitsScreen() {
   const deleteHabit = async (habitId) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(HabitEndpoints.DELETE(habitId), {
+      const res = await AuthService.authFetch(HabitEndpoints.DELETE(habitId), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -198,7 +199,7 @@ export default function HabitsScreen() {
           targetType: form.targetType,
         }),
       };
-      const res = await fetch(HabitEndpoints.CREATE, {
+      const res = await AuthService.authFetch(HabitEndpoints.CREATE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
@@ -217,7 +218,7 @@ export default function HabitsScreen() {
   const handleLog = async (value) => {
     try {
       const token = await AsyncStorage.getItem('token');
-      await fetch(HabitEndpoints.COMPLETE, {
+      await AuthService.authFetch(HabitEndpoints.COMPLETE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ habitId: selectedHabit._id, date: selectedDay.date, value, completed: value }),
@@ -598,7 +599,7 @@ const s = StyleSheet.create({
 
   iconBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },
 
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.border },
+  bar: { flexDirection: 'row', alignItems: 'center', maxWidth:"85%", gap: 10, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.border },
   barBack: { width: 48, height: 48, borderRadius: 14, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },
   barNext: { width: '100%', height: 48, backgroundColor: T.white, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   barNextOff: { backgroundColor: T.raised },

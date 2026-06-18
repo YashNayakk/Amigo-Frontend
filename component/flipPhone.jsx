@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PerformanceEndpoints } from "../services/apis";
+import AuthService from "../services/authService";
 
 const T = {
   bg:      "#080808", surface: "#101010", raised: "#181818",
@@ -79,7 +80,7 @@ const FlipFocus = () => {
 
     try {
       const token = await AsyncStorage.getItem("token");
-      const res   = await fetch(PerformanceEndpoints.UPDATE_REWARD, {
+      const res   = await AuthService.authFetch(PerformanceEndpoints.UPDATE_REWARD, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

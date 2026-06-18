@@ -1,11 +1,54 @@
 import {
   StyleSheet, Text, TouchableOpacity, View,
-  FlatList, Image, ActivityIndicator, Alert,
+  FlatList, Image, ActivityIndicator, Alert, Dimensions
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { WitnessEndpoints } from "../services/apis";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import { BASE_URL } from 'react-native-dotenv';
+import AuthService from "../services/authService";
+
+const { width } = Dimensions.get("window");
+
+const T = {
+  bg: "#080808",
+  surface: "#101010",
+  raised: "#181818",
+  border: "#1e1e1e",
+  hi: "#2a2a2a",
+  text: "#efefef",
+  mid: "#888",
+  dim: "#444",
+  white: "#ffffff",
+  black: "#000000",
+};
+
+const SERVER_BASE = (BASE_URL || "")
+  .replace(/\/+$/, "")       // remove trailing slashes
+  .replace(/\/api$/, "");    // remove /api suffix to get server root
+
+const resolveImageUri = (path) => {
+  if (!path || typeof path !== "string" || path.trim() === "") return null;
+
+  // Already absolute URL → use as-is
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    console.log("[Avatar] Using absolute URL:", path);
+    return path;
+  }
+
+  // Local file URI from image picker → use as-is
+  if (path.startsWith("file://") || path.startsWith("content://")) {
+    console.log("[Avatar] Using local URI:", path);
+    return path;
+  }
+
+  // Relative server path → prepend server base
+  const separator = path.startsWith("/") ? "" : "/";
+  const resolved = `${SERVER_BASE}${separator}${path}`;
+  console.log("[Avatar] Resolved relative path:", path, "→", resolved);
+  return resolved;
+};
 
 const Notifications = () => {
   const navigation = useNavigation();
@@ -25,13 +68,14 @@ const Notifications = () => {
       setFetchError(false);
       const token = await AsyncStorage.getItem("token");
 
-      const response = await fetch(WitnessEndpoints.GET_ALL_REQUESTS, {
+      const response = await AuthService.authFetch(WitnessEndpoints.GET_ALL_REQUESTS, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) throw new Error(`Server error ${response.status}`);
 
       const res = await response.json();
+      console.log("res", res)
       if (res.success) {
         setRequests(res.data);
       } else {
@@ -50,7 +94,7 @@ const Notifications = () => {
       setProcessingId(id);
       const token = await AsyncStorage.getItem("token");
 
-      const response = await fetch(WitnessEndpoints.SEND_RESPOND, {
+      const response = await AuthService.authFetch(WitnessEndpoints.SEND_RESPOND, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,7 +108,6 @@ const Notifications = () => {
       if (res.success) {
         setRequests((prev) => prev.filter((req) => req._id !== id));
         Alert.alert("Success", "Witness request accepted!");
-        navigation.navigate("Impengo");
       } else {
         Alert.alert("Error", res.message || "Failed to accept request");
       }
@@ -81,7 +124,7 @@ const Notifications = () => {
       setProcessingId(id);
       const token = await AsyncStorage.getItem("token");
 
-      const response = await fetch(WitnessEndpoints.SEND_RESPOND, {
+      const response = await AuthService.authFetch(WitnessEndpoints.SEND_RESPOND, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -105,14 +148,71 @@ const Notifications = () => {
     }
   };
 
+  const Avatar = ({ uri, initial, style, initialStyle }) => {
+    const [hasError, setHasError] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Reset states when URI changes
+    useEffect(() => {
+      setHasError(false);
+      setIsLoading(true);
+      console.log("[Avatar] URI changed to:", uri);
+    }, [uri]);
+
+    if (uri && !hasError) {
+      return (
+        <View style={style}>
+          <Image
+            source={{
+              uri,
+              // FIX: cache headers help with emulator image loading
+              headers: { Pragma: "no-cache" },
+            }}
+            style={[style, { position: 'absolute', top: 0, left: 0 }]}
+            resizeMode="cover"
+            onLoad={() => {
+              console.log("[Avatar] Image loaded successfully:", uri);
+              setIsLoading(false);
+            }}
+            onError={(e) => {
+              console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
+              setHasError(true);
+              setIsLoading(false);
+            }}
+          />
+          {/* Show initial while loading */}
+          {isLoading && (
+            <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
+              <ActivityIndicator size="small" color={T.mid} />
+            </View>
+          )}
+        </View>
+      );
+    }
+
+    // Fallback: show initial letter
+    return (
+      <View style={[style, s.avatarFallback]}>
+        <Text style={initialStyle}>{initial || "?"}</Text>
+      </View>
+    );
+  };
+
   const renderRequestItem = ({ item }) => {
     const isProcessing = processingId === item._id;
 
+    const initial = (item?.requester?.name || "?").charAt(0).toUpperCase();
+    const avatarUri = resolveImageUri(item?.requester?.profilePicture);
+
+    console.log("[Profile] avatarUri:", avatarUri);
+
     return (
       <View style={styles.card}>
-        <Image
-          source={{ uri: item.requester.profilePicture }}
-          style={styles.avatar}
+        <Avatar
+          uri={avatarUri}
+          initial={initial}
+          style={s.avatar}
+          initialStyle={s.avatarInitial}
         />
         <View style={styles.textContainer}>
           <Text style={styles.name}>{item.requester.name}</Text>
@@ -197,6 +297,15 @@ const Notifications = () => {
 
 export default Notifications;
 
+const TILE = (width - 40 - 10) / 2;
+
+
+const s = StyleSheet.create({
+  avatar: { width: 70, height: 70, borderRadius: 13, borderWidth: 1.5, borderColor: T.surface },
+  avatarFallback: { backgroundColor: T.raised, alignItems: "center", justifyContent: "center" },
+  avatarInitial: { fontSize: 32, fontWeight: "900", color: T.mid, letterSpacing: -1 },
+})
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -263,6 +372,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 14,
     marginBottom: 12,
+    gap:16,
   },
   avatar: {
     width: 48,

@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { CommitmentPodEndpoints } from '../services/apis';
 import { getSocket } from '../services/SocketService';
+import AuthService from '../services/authService';
 
 const T = {
   bg: '#080808', surface: '#101010', raised: '#181818',
@@ -158,7 +159,7 @@ const PodDetailScreen = () => {
   const shareCardViaHttp = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(CommitmentPodEndpoints.SHARE_CARDS(podId), {
+      const res = await AuthService.authFetch(CommitmentPodEndpoints.SHARE_CARDS(podId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ activityName, satisfactionLevel, customMessage }),
@@ -189,7 +190,7 @@ const PodDetailScreen = () => {
       const token = await AsyncStorage.getItem('token');
       const userId = await AsyncStorage.getItem('userId');
 
-      const res = await fetch(CommitmentPodEndpoints.GET_BY_ID(podId), {
+      const res = await AuthService.authFetch(CommitmentPodEndpoints.GET_BY_ID(podId), {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
 
@@ -219,7 +220,7 @@ const PodDetailScreen = () => {
   const loadCards = async (token) => {
     try {
       const t = token || await AsyncStorage.getItem('token');
-      const res = await fetch(CommitmentPodEndpoints.SHARE_CARDS(podId), {
+      const res = await AuthService.authFetch(CommitmentPodEndpoints.SHARE_CARDS(podId), {
         headers: { Authorization: `Bearer ${t}` },
       }).then(r => r.json());
       if (res?.success) setCards(res.cards || []);
@@ -229,7 +230,7 @@ const PodDetailScreen = () => {
   const loadStats = async (token) => {
     try {
       const t = token || await AsyncStorage.getItem('token');
-      const res = await fetch(CommitmentPodEndpoints.CARD_STATS(podId), {
+      const res = await AuthService.authFetch(CommitmentPodEndpoints.CARD_STATS(podId), {
         headers: { Authorization: `Bearer ${t}` },
       }).then(r => r.json());
       if (res?.success) setStats(res.stats);
@@ -240,7 +241,7 @@ const PodDetailScreen = () => {
     try {
       setStreaksLoading(true);
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(CommitmentPodEndpoints.STREAKS(podId), {
+      const res = await AuthService.authFetch(CommitmentPodEndpoints.STREAKS(podId), {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
       if (res?.success) setStreaks(res.streaks || []);
@@ -266,7 +267,7 @@ const PodDetailScreen = () => {
             try {
               setActionLoading(true);
               const token = await AsyncStorage.getItem('token');
-              const res = await fetch(CommitmentPodEndpoints.DELETE_POD(podId), {
+              const res = await AuthService.authFetch(CommitmentPodEndpoints.DELETE_POD(podId), {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
               }).then(r => r.json());
@@ -295,7 +296,7 @@ const PodDetailScreen = () => {
             try {
               setRemovingWitnessId(witnessUserId);
               const token = await AsyncStorage.getItem('token');
-              const res = await fetch(CommitmentPodEndpoints.REMOVE_WITNESS(podId, witnessUserId), {
+              const res = await AuthService.authFetch(CommitmentPodEndpoints.REMOVE_WITNESS(podId, witnessUserId), {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
               }).then(r => r.json());
@@ -324,7 +325,7 @@ const PodDetailScreen = () => {
     try {
       setActionLoading(true);
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(CommitmentPodEndpoints.JOIN_POD(podId), {
+      const res = await AuthService.authFetch(CommitmentPodEndpoints.JOIN_POD(podId), {
         method: 'POST', headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
       if (res?.success) { setMyStatus('accepted'); loadCards(); loadStats(); }
@@ -341,7 +342,7 @@ const PodDetailScreen = () => {
           try {
             setActionLoading(true);
             const token = await AsyncStorage.getItem('token');
-            const res = await fetch(CommitmentPodEndpoints.DECLINE_POD(podId), {
+            const res = await AuthService.authFetch(CommitmentPodEndpoints.DECLINE_POD(podId), {
               method: 'POST', headers: { Authorization: `Bearer ${token}` },
             }).then(r => r.json());
             if (res?.success) navigation.goBack();
@@ -365,7 +366,7 @@ const PodDetailScreen = () => {
             try {
               setActionLoading(true);
               const token = await AsyncStorage.getItem('token');
-              const res = await fetch(CommitmentPodEndpoints.LEAVE(podId), {
+              const res = await AuthService.authFetch(CommitmentPodEndpoints.LEAVE(podId), {
                 method: 'POST', headers: { Authorization: `Bearer ${token}` },
               }).then(r => r.json());
               if (res?.success) navigation.goBack();

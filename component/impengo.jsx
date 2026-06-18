@@ -8,6 +8,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WitnessEndpoints, CommitmentPodEndpoints } from '../services/apis';
 import { useNavigation } from '@react-navigation/native';
 import  MMKV  from 'react-native-mmkv';
+import AuthService from '../services/authService';
 
 const T = {
   bg: '#080808', surface: '#101010', raised: '#181818',
@@ -87,7 +88,7 @@ const ChatListScreen = () => {
   const loadConnections = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
-      const res   = await fetch(WitnessEndpoints.GET_CONNECTIONS, {
+      const res   = await AuthService.authFetch(WitnessEndpoints.GET_CONNECTIONS, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
 
@@ -119,8 +120,8 @@ const ChatListScreen = () => {
       const userId = await AsyncStorage.getItem("userId");
 
       const [myPodsRes, witnessPodsRes] = await Promise.all([
-        fetch(CommitmentPodEndpoints.MY_PODS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(CommitmentPodEndpoints.WITNESS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        AuthService.authFetch(CommitmentPodEndpoints.MY_PODS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        AuthService.authFetch(CommitmentPodEndpoints.WITNESS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       ]);
 
       const adminFormatted = (myPodsRes?.success ? myPodsRes.pods || [] : [])

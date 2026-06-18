@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Dimensions, Image, Alert, Modal, TextInput,
@@ -9,7 +9,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import AuthService from "../services/authService";
-import { UserEndpoints, BASE_URL } from "../services/apis";
+import { UserEndpoints} from "../services/apis";
+import { BASE_URL } from 'react-native-dotenv';
 import Icon from "react-native-vector-icons/Ionicons";
 import { launchImageLibrary } from "react-native-image-picker";
 
@@ -28,18 +29,30 @@ const T = {
   black: "#000000",
 };
 
-// FIX 1: strip any trailing slash from BASE_URL once, then always use a
-// leading slash on the path — prevents the double-slash that breaks Android.
-const BASE = (BASE_URL || "").replace(/\/+$/, "");
+const SERVER_BASE = (BASE_URL || "")
+  .replace(/\/+$/, "")       // remove trailing slashes
+  .replace(/\/api$/, "");    // remove /api suffix to get server root
 
 const resolveImageUri = (path) => {
   if (!path || typeof path !== "string" || path.trim() === "") return null;
-  // Already an absolute URL (http/https) — use as-is
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  // Relative path from the server — prepend the clean base
-  // Ensure exactly one slash between BASE and path
+
+  // Already absolute URL → use as-is
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    console.log("[Avatar] Using absolute URL:", path);
+    return path;
+  }
+
+  // Local file URI from image picker → use as-is
+  if (path.startsWith("file://") || path.startsWith("content://")) {
+    console.log("[Avatar] Using local URI:", path);
+    return path;
+  }
+
+  // Relative server path → prepend server base
   const separator = path.startsWith("/") ? "" : "/";
-  return `${BASE}${separator}${path}`;
+  const resolved = `${SERVER_BASE}${separator}${path}`;
+  console.log("[Avatar] Resolved relative path:", path, "→", resolved);
+  return resolved;
 };
 
 const ROLES = [
@@ -60,32 +73,53 @@ const formatDate = (str) => {
   });
 };
 
-// ── FIX 2: Avatar component with proper error state ──────────────────────────
-// Keeps its own `hasError` flag so a broken URL falls back to the initial
-// instead of showing a blank square.
+// ── FIX 2: Robust Avatar component ──────────────────────────────────────────
 const Avatar = ({ uri, initial, style, initialStyle }) => {
   const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Reset error when uri changes (e.g. after a successful upload)
-  useEffect(() => { setHasError(false); }, [uri]);
+  // Reset states when URI changes
+  useEffect(() => {
+    setHasError(false);
+    setIsLoading(true);
+    console.log("[Avatar] URI changed to:", uri);
+  }, [uri]);
 
   if (uri && !hasError) {
     return (
-      <Image
-        source={{ uri }}
-        style={style}
-        resizeMode="cover"
-        onError={() => {
-          console.warn("Avatar failed to load:", uri);
-          setHasError(true);
-        }}
-      />
+      <View style={style}>
+        <Image
+          source={{
+            uri,
+            // FIX: cache headers help with emulator image loading
+            headers: { Pragma: "no-cache" },
+          }}
+          style={[style, { position: 'absolute', top: 0, left: 0 }]}
+          resizeMode="cover"
+          onLoad={() => {
+            console.log("[Avatar] Image loaded successfully:", uri);
+            setIsLoading(false);
+          }}
+          onError={(e) => {
+            console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
+            setHasError(true);
+            setIsLoading(false);
+          }}
+        />
+        {/* Show initial while loading */}
+        {isLoading && (
+          <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
+            <ActivityIndicator size="small" color={T.mid} />
+          </View>
+        )}
+      </View>
     );
   }
 
+  // Fallback: show initial letter
   return (
     <View style={[style, s.avatarFallback]}>
-      <Text style={initialStyle}>{initial}</Text>
+      <Text style={initialStyle}>{initial || "?"}</Text>
     </View>
   );
 };
@@ -158,10 +192,7 @@ const Profile = () => {
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem("token");
-      const res = await fetch(UserEndpoints.GET_PROFILE, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await AuthService.authFetch(UserEndpoints.GET_PROFILE);
 
       if (res.status === 401) {
         await AuthService.logout();
@@ -169,20 +200,25 @@ const Profile = () => {
         return;
       }
 
-      const ct = res.headers.get("content-type") || "";
-      if (!ct.includes("application/json")) throw new Error("Non-JSON response");
-
       const json = await res.json();
+      console.log("[Profile] API response:", JSON.stringify(json, null, 2));
+
       if (res.ok && json.success) {
-        await AsyncStorage.setItem("user", JSON.stringify(json.data));
-        applyUser(json.data);
+        const userData = json.data || json.user;
+        console.log("[Profile] profilePicture field:", userData?.profilePicture);
+        await AsyncStorage.setItem("user", JSON.stringify(userData));
+        applyUser(userData);
       } else {
-        throw new Error(json.message || "Failed");
+        throw new Error(json.message || "Failed to load profile");
       }
     } catch (err) {
-      console.error("loadProfile:", err);
+      console.error("[Profile] loadProfile error:", err);
       const cached = await AsyncStorage.getItem("user");
-      if (cached) applyUser(JSON.parse(cached));
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        console.log("[Profile] Using cached user, profilePicture:", parsed?.profilePicture);
+        applyUser(parsed);
+      }
     } finally {
       setLoading(false);
     }
@@ -197,9 +233,6 @@ const Profile = () => {
   };
 
   const openEditModal = () => {
-    // FIX 3: always clear selectedImage when opening the modal so the picker
-    // preview starts fresh — previously a stale local file:// URI from a prior
-    // session could persist and hide the current server-side profile picture.
     setSelectedImage(null);
     setModalVisible(true);
   };
@@ -224,14 +257,38 @@ const Profile = () => {
         [{ text: "Cancel", style: "cancel" }, { text: "Open Settings", onPress: () => Linking.openSettings() }]);
       return;
     }
-    const result = await launchImageLibrary({ mediaType: "photo", quality: 0.8, maxWidth: 1000, maxHeight: 1000 });
-    if (result.assets?.length) setSelectedImage(result.assets[0].uri);
+
+    const result = await launchImageLibrary({
+      mediaType: "photo",
+      quality: 0.8,
+      maxWidth: 1000,
+      maxHeight: 1000,
+      includeBase64: false,
+    });
+
+    console.log("[Profile] Image picker result:", result);
+
+    if (result.didCancel) {
+      console.log("[Profile] User cancelled image picker");
+      return;
+    }
+
+    if (result.errorCode) {
+      console.warn("[Profile] Image picker error:", result.errorMessage);
+      Alert.alert("Error", result.errorMessage || "Failed to pick image");
+      return;
+    }
+
+    if (result.assets?.length) {
+      const asset = result.assets[0];
+      console.log("[Profile] Selected image URI:", asset.uri);
+      setSelectedImage(asset.uri);
+    }
   };
 
   const handleSave = async () => {
     setUploading(true);
     try {
-      const token = await AsyncStorage.getItem("token");
       const userId = user._id || user.id;
 
       const form = new FormData();
@@ -241,32 +298,44 @@ const Profile = () => {
       form.append("role", editRole);
 
       if (selectedImage) {
+        // FIX: Ensure proper URI format for Android
+        const uri = Platform.OS === "android"
+          ? selectedImage
+          : selectedImage.replace("file://", "");
+
         form.append("profilePicture", {
-          uri: selectedImage,
+          uri,
           type: "image/jpeg",
           name: "profile.jpg",
         });
+        console.log("[Profile] Appending image with URI:", uri);
       }
 
-      const res = await fetch(UserEndpoints.UPDATE(userId), {
+      console.log("[Profile] Saving to:", UserEndpoints.UPDATE(userId));
+
+      const res = await AuthService.authFetch(UserEndpoints.UPDATE(userId), {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
+        // ✅ No Content-Type header — authService handles FormData detection
       });
 
+      console.log("[Profile] Save response status:", res.status);
       const json = await res.json();
+      console.log("[Profile] Save response body:", JSON.stringify(json, null, 2));
+
       if (res.ok && json.success) {
-        await AsyncStorage.setItem("user", JSON.stringify(json.data));
-        applyUser(json.data);
-        // FIX 4: clear selectedImage AFTER saving so the main screen immediately
-        // shows the fresh server URL (resolved via resolveImageUri) rather than
-        // keeping the stale local file:// URI in state.
+        const updatedUser = json.data || json.user;
+        console.log("[Profile] Updated profilePicture:", updatedUser?.profilePicture);
+        await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+        applyUser(updatedUser);
         setSelectedImage(null);
         setModalVisible(false);
+        Alert.alert("Success", "Profile updated!");
       } else {
         Alert.alert("Error", json.message || "Failed to update profile");
       }
     } catch (err) {
+      console.log("[Profile] Save error:", err);
       Alert.alert("Error", err.message || "Failed to update profile");
     } finally {
       setUploading(false);
@@ -298,16 +367,11 @@ const Profile = () => {
     return (
       <SafeAreaView style={s.wrap} edges={["top"]}>
         <View style={s.loadingWrap}>
-          <Text style={[s.loadingText, { marginBottom: 20 }]}>
-            Could not load profile
-          </Text>
+          <Text style={[s.loadingText, { marginBottom: 20 }]}>Could not load profile</Text>
           <TouchableOpacity style={s.retryButton} onPress={loadProfile}>
             <Text style={s.retryText}>Try Again</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.editBtn, { paddingHorizontal: 24 }]}
-            onPress={handleLogout}
-          >
+          <TouchableOpacity style={[s.editBtn, { paddingHorizontal: 24 }]} onPress={handleLogout}>
             <Icon name="log-out-outline" size={14} color="#ff6b6b" />
             <Text style={[s.editBtnText, { color: "#ff6b6b" }]}>Log Out</Text>
           </TouchableOpacity>
@@ -316,17 +380,18 @@ const Profile = () => {
     );
   }
 
-  // Strip /api suffix to get the server root for static files
-  const BASE = (BASE_URL || "").replace(/\/+$/, "").replace(/\/api$/, "");
-
-  const resolveImageUri = (path) => {
-    if (!path || typeof path !== "string" || path.trim() === "") return null;
-    if (path.startsWith("http://") || path.startsWith("https://")) return path;
-    const separator = path.startsWith("/") ? "" : "/";
-    return `${BASE}${separator}${path}`;
-  };
   const initial = (user?.name || "?").charAt(0).toUpperCase();
+
+  // FIX 3: Use module-level resolveImageUri (not the duplicate inside component)
+  // selectedImage (local picker URI) takes priority over server URL
   const avatarUri = resolveImageUri(user?.profilePicture);
+  const modalAvatarUri = selectedImage
+    ? resolveImageUri(selectedImage)   // local file:// URI from picker
+    : avatarUri;                       // server URL
+
+  console.log("[Profile] avatarUri:", avatarUri);
+  console.log("[Profile] modalAvatarUri:", modalAvatarUri);
+
   return (
     <SafeAreaView style={s.wrap} edges={["top"]}>
       <StatusBar barStyle="light-content" />
@@ -335,16 +400,9 @@ const Profile = () => {
 
         {/* ── Hero block ── */}
         <View style={s.hero}>
-
-          {/* Avatar + ring */}
           <View style={s.avatarSection}>
-            <TouchableOpacity
-              style={s.avatarOuter}
-              onPress={openEditModal}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={s.avatarOuter} onPress={openEditModal} activeOpacity={0.85}>
               <View style={s.avatarRingOuter} />
-              {/* FIX 6: use the Avatar component — handles load errors gracefully */}
               <Avatar
                 uri={avatarUri}
                 initial={initial}
@@ -445,12 +503,10 @@ const Profile = () => {
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingBottom: 16 }}
               >
-                {/* Avatar picker — shows selectedImage (local) if picked,
-                    otherwise shows the current server-side avatarUri */}
                 <View style={s.pickerRow}>
                   <TouchableOpacity style={s.pickerWrap} onPress={pickImage} activeOpacity={0.8}>
                     <Avatar
-                      uri={selectedImage || avatarUri}
+                      uri={modalAvatarUri}
                       initial={initial}
                       style={s.pickerImg}
                       initialStyle={s.pickerInitial}
@@ -462,8 +518,14 @@ const Profile = () => {
                   <View style={{ flex: 1 }}>
                     <Text style={s.pickerLabel}>PROFILE PHOTO</Text>
                     <Text style={s.pickerHint}>
-                      {selectedImage ? "New photo selected" : "Tap to change your photo"}
+                      {selectedImage ? "✓ New photo selected" : "Tap to change your photo"}
                     </Text>
+                    {/* FIX: Debug helper - shows what URI we're using */}
+                    {__DEV__ && (
+                      <Text style={{ color: T.dim, fontSize: 9, marginTop: 4 }} numberOfLines={2}>
+                        {modalAvatarUri || "no uri"}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -563,122 +625,52 @@ const Profile = () => {
 
 export default Profile;
 
-const TILE = (width - 40 - 10) / 2; // two-col tile width
+const TILE = (width - 40 - 10) / 2;
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.bg },
   scroll: { paddingBottom: 80 },
   loadingWrap: { flex: 1, backgroundColor: T.bg, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { color: T.mid, fontSize: 13 },
-
-  // ── Top bar ──
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: T.border,
-  },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: T.border },
   topHandle: { color: T.text, fontSize: 16, fontWeight: "900", letterSpacing: -0.3 },
   iconBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: "center", justifyContent: "center" },
-
-  // ── Hero ──
-  hero: {
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 24,
-  },
-
-  // Avatar row (avatar left, stats right)
-  avatarSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  avatarOuter: {
-    position: "relative",
-    marginRight: 20,
-  },
-  avatarRingOuter: {
-    position: "absolute",
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: T.hi,
-  },
+  hero: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 24 },
+  avatarSection: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
+  avatarOuter: { position: "relative", marginRight: 20 },
+  avatarRingOuter: { position: "absolute", top: -4, left: -4, right: -4, bottom: -4, borderRadius: 10, borderWidth: 1, borderColor: T.hi },
   avatar: { width: 86, height: 86, borderRadius: 13, borderWidth: 1.5, borderColor: T.surface },
   avatarFallback: { backgroundColor: T.raised, alignItems: "center", justifyContent: "center" },
   avatarInitial: { fontSize: 32, fontWeight: "900", color: T.mid, letterSpacing: -1 },
-  cameraBadge: { position: "absolute", bottom: 2, right: 2, width: 22, height: 22, borderRadius: 11, backgroundColor: T.white, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: T.bg },
-
-  heroStats: {
-    flex: 1,
-    flexDirection: "column",
-    overflow: "hidden",
-    gap: 9,
-  },
-
-  // Name block
-  nameBlock: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
+  heroStats: { flex: 1, flexDirection: "column", overflow: "hidden", gap: 9 },
+  nameBlock: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   heroName: { color: T.text, fontSize: 20, fontWeight: "900", letterSpacing: -0.4 },
   rolePill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
   roleDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: T.mid },
   rolePillText: { color: T.dim, fontSize: 8, fontWeight: "700", letterSpacing: 1.5 },
-
   heroBio: { color: T.mid, fontSize: 13, lineHeight: 20, marginBottom: 10 },
   heroBioEmpty: { color: T.dim, fontSize: 13, marginBottom: 10, fontStyle: "italic" },
-
   joinedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
   joinedText: { color: T.dim, fontSize: 11, fontWeight: "500" },
-
   editBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingVertical: 10, borderRadius: 12 },
   editBtnText: { color: T.text, fontSize: 13, fontWeight: "700", letterSpacing: -0.1 },
-
-  // ── Section divider ──
   sectionDivider: { height: 1, backgroundColor: T.border },
-
-  // ── Tiles ──
   tilesSection: { paddingHorizontal: 20, paddingTop: 24 },
   tilesSectionLabel: { color: T.dim, fontSize: 9, fontWeight: "700", letterSpacing: 2, marginBottom: 12 },
   tilesGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-
-  tile: {
-    width: TILE,
-    backgroundColor: T.surface,
-    borderWidth: 1,
-    borderColor: T.border,
-    borderRadius: 14,
-    padding: 16,
-  },
+  tile: { width: TILE, backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 16 },
   tileWide: { width: "100%" },
   tileIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: "center", justifyContent: "center", marginBottom: 10 },
   tileLabel: { color: T.dim, fontSize: 9, fontWeight: "700", letterSpacing: 1.5, marginBottom: 4 },
   tileValue: { color: T.text, fontSize: 14, fontWeight: "700", letterSpacing: -0.2 },
-
-  // ── Sections ──
   sections: { paddingHorizontal: 20 },
   card: { backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 14, overflow: "hidden" },
-
-  // ── Modal ──
   eyebrow: { color: T.dim, fontSize: 9, fontWeight: "700", letterSpacing: 2, marginBottom: 2 },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "flex-end" },
   sheet: { backgroundColor: T.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, maxHeight: "92%", borderTopWidth: 1, borderColor: T.border, flexShrink: 1 },
   sheetPill: { width: 36, height: 4, borderRadius: 2, backgroundColor: T.hi, alignSelf: "center", marginBottom: 24 },
   sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 },
   sheetTitle: { color: T.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.4 },
-
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 24 },
   pickerWrap: { position: "relative" },
   pickerImg: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, borderColor: T.hi },
@@ -687,7 +679,6 @@ const s = StyleSheet.create({
   pickerBadge: { position: "absolute", bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: T.white, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: T.surface },
   pickerLabel: { color: T.text, fontSize: 13, fontWeight: "700", marginBottom: 3 },
   pickerHint: { color: T.mid, fontSize: 11 },
-
   fieldDivider: { height: 1, backgroundColor: T.border, marginBottom: 22 },
   fieldBox: { marginBottom: 18 },
   fieldLabel: { color: T.dim, fontSize: 9, fontWeight: "700", letterSpacing: 1.8, marginBottom: 8 },
@@ -695,27 +686,14 @@ const s = StyleSheet.create({
   fieldRow: { flexDirection: "row", alignItems: "center", backgroundColor: T.raised, borderWidth: 1, borderColor: T.hi, borderRadius: 12, paddingLeft: 14 },
   fieldPrefix: { color: T.mid, fontSize: 15, fontWeight: "600" },
   fieldFlex: { flex: 1, borderWidth: 0, paddingLeft: 6 },
-
-  retryButton: {
-    borderWidth: 0.8,
-    borderColor: "#fff",
-    paddingVertical: 10,
-    paddingHorizontal: 30,
-    borderRadius: 16,
-  },
-  retryText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
+  retryButton: { borderWidth: 0.8, borderColor: "#fff", paddingVertical: 10, paddingHorizontal: 30, borderRadius: 16 },
+  retryText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   roleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   roleChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, borderRadius: 10 },
   roleChipOn: { backgroundColor: T.white, borderColor: T.white },
   roleChipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: T.black },
   roleChipText: { color: T.mid, fontSize: 13, fontWeight: "600" },
   roleChipTextOn: { color: T.black },
-
   bar: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.border },
   barBack: { width: 48, height: 48, borderRadius: 14, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: "center", justifyContent: "center" },
   barNext: { flex: 1, height: 48, backgroundColor: T.white, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center" },

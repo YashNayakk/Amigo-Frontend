@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import { PerformanceEndpoints, HabitEndpoints } from '../services/apis';
 import { getSocket } from '../services/SocketService';
+import AuthService from '../services/authService';
 
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -400,8 +401,8 @@ const Performance = () => {
             const headers = { Authorization: `Bearer ${token}` };
 
             const [perfRes, habitsRes] = await Promise.all([
-                fetch(PerformanceEndpoints.GET_PERFORMANCE, { headers }),
-                fetch(HabitEndpoints.GET_ALL, { headers }),
+                AuthService.authFetch(PerformanceEndpoints.GET_PERFORMANCE, { headers }),
+                AuthService.authFetch(HabitEndpoints.GET_ALL, { headers }),
             ]);
 
             const perfJson = await perfRes.json();

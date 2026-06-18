@@ -15,6 +15,7 @@ import { PerformanceEndpoints } from "../services/apis";
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useMemo } from 'react';
 import NetInfo from "@react-native-community/netinfo";
+import AuthService from "../services/authService";
 
 const { width, height } = Dimensions.get("window");
 
@@ -104,7 +105,7 @@ const Home = ({ navigation }) => {
       const token = await AsyncStorage.getItem("token");
 
       // Fetch performance data
-      const perfResponse = await fetch(PerformanceEndpoints.GET_PERFORMANCE, {
+      const perfResponse = await AuthService.authFetch(PerformanceEndpoints.GET_PERFORMANCE, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
