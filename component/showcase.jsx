@@ -44,22 +44,16 @@ const SERVER_BASE = (BASE_URL || "")
 const resolveImageUri = (path) => {
   if (!path || typeof path !== "string" || path.trim() === "") return null;
 
-  // Already absolute URL → use as-is
   if (path.startsWith("http://") || path.startsWith("https://")) {
-    console.log("[Avatar] Using absolute URL:", path);
     return path;
   }
 
-  // Local file URI from image picker → use as-is
   if (path.startsWith("file://") || path.startsWith("content://")) {
-    console.log("[Avatar] Using local URI:", path);
     return path;
   }
 
-  // Relative server path → prepend server base
   const separator = path.startsWith("/") ? "" : "/";
   const resolved = `${SERVER_BASE}${separator}${path}`;
-  console.log("[Avatar] Resolved relative path:", path, "→", resolved);
   return resolved;
 };
 
@@ -77,7 +71,7 @@ const momentumMeta = (m) => {
 
 const scoreColor = (s) =>
   s >= 4 ? T.accent :
-    s >= 2.5 ? T.yellow : T.blue;
+  s >= 2.5 ? T.yellow : T.blue;
 
 const Bar = ({ fill, color = T.accent }) => (
   <View style={bar.track}>
@@ -151,70 +145,63 @@ const FlipCard = ({ data, index }) => {
 
   const perf = data?.performance || {};
   const score = parseFloat(perf.score || 0);
-  const consistency = parseInt(perf.consistency || 0);   // 0-100 %
+  const consistency = parseInt(perf.consistency || 0);  
   const streak = parseInt(perf.currentStreak || 0);
   const bestStreak = parseInt(perf.bestStreak || 0);
-  const habitScore = parseFloat(perf.habitScore || 0);   // 0-5
-  const metricScore = parseFloat(perf.metricScore || 0);   // 0-5
+  const habitScore = parseFloat(perf.habitScore || 0);  
+  const metricScore = parseFloat(perf.metricScore || 0);  
   const habitCount = parseInt(data?.habitCount || perf.habitCount || 0);
   const focusSessions = parseInt(perf.focus?.totalSessions || data?.focusSessions || 0);
   const focusMins = Math.round((perf.focus?.totalSecs || 0) / 60);
   const mom = momentumMeta(perf.momentum);
 
-   const Avatar = ({ uri, initial, style, initialStyle }) => {
-      const [hasError, setHasError] = useState(false);
-      const [isLoading, setIsLoading] = useState(true);
-  
-      // Reset states when URI changes
-      useEffect(() => {
-        setHasError(false);
-        setIsLoading(true);
-        console.log("[Avatar] URI changed to:", uri);
-      }, [uri]);
-  
-      if (uri && !hasError) {
-        return (
-          <View style={style}>
-            <Image
-              source={{
-                uri,
-                // FIX: cache headers help with emulator image loading
-                headers: { Pragma: "no-cache" },
-              }}
-              style={[style, { position: 'absolute', top: 0, left: 0 }]}
-              resizeMode="cover"
-              onLoad={() => {
-                console.log("[Avatar] Image loaded successfully:", uri);
-                setIsLoading(false);
-              }}
-              onError={(e) => {
-                console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
-                setHasError(true);
-                setIsLoading(false);
-              }}
-            />
-            {/* Show initial while loading */}
-            {isLoading && (
-              <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
-                <ActivityIndicator size="small" color={T.mid} />
-              </View>
-            )}
-          </View>
-        );
-      }
-  
-      // Fallback: show initial letter
+  const Avatar = ({ uri, initial, style, initialStyle }) => {
+    const [hasError, setHasError] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+      setHasError(false);
+      setIsLoading(true);
+    }, [uri]);
+
+    if (uri && !hasError) {
       return (
-        <View style={[style, s.avatarFallback]}>
-          <Text style={initialStyle}>{initial || "?"}</Text>
+        <View style={style}>
+          <Image
+            source={{
+              uri,
+              headers: { Pragma: "no-cache" },
+            }}
+            style={[style, { position: 'absolute', top: 0, left: 0 }]}
+            resizeMode="cover"
+            onLoad={() => {
+              setIsLoading(false);
+            }}
+            onError={(e) => {
+              console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
+              setHasError(true);
+              setIsLoading(false);
+            }}
+          />
+          {isLoading && (
+            <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
+              <ActivityIndicator size="small" color={T.mid} />
+            </View>
+          )}
         </View>
       );
-    };
+    }
+
+    return (
+      <View style={[style, s.avatarFallback]}>
+        <Text style={initialStyle}>{initial || "?"}</Text>
+      </View>
+    );
+  };
 
   const initial = (data?.name || "?").charAt(0).toUpperCase();
   const avatarUri = resolveImageUri(data?.profilePicture);
 
-  console.log("[Profile] avatarUri:", avatarUri);
   const isWitness = data?.role === "Witness";
 
   const focusStr = focusMins >= 60
@@ -232,7 +219,6 @@ const FlipCard = ({ data, index }) => {
       }]}>
         <TouchableOpacity activeOpacity={1} onPress={flip} style={s.inner}>
 
-          {/* LEFT */}
           <View style={s.left}>
             <View style={s.avatarWrap}>
               {data?.profilePicture
@@ -244,14 +230,12 @@ const FlipCard = ({ data, index }) => {
                 />
                 : <View style={[s.avatar, s.avatarFb]}><Text style={s.avatarLetter}>{initial}</Text></View>
               }
-              {/* Consistency-driven status dot */}
               <View style={[s.dot, { backgroundColor: consistency >= 60 ? T.accent : consistency >= 30 ? T.yellow : T.red }]} />
             </View>
 
             <Text style={s.name} numberOfLines={1}>{data?.name || "Unknown"}</Text>
             <Text style={s.role}>{data?.role || "Member"}</Text>
 
-            {/* Streak pill — only shown if they have one */}
             {streak > 0 && (
               <View style={s.streakPill}>
                 <Text style={s.streakTxt}>{streak}d streak</Text>
@@ -266,19 +250,15 @@ const FlipCard = ({ data, index }) => {
 
           <View style={s.vLine} />
 
-          {/* RIGHT */}
           <View style={s.right}>
 
-            {/* Score + momentum in one row */}
             <View style={s.topRow}>
               <ScoreCircle score={score} />
               <View style={{ flex: 1, marginLeft: "40%" }}>
-                {/* Momentum badge */}
                 <View style={[s.momBadge, { borderColor: mom.color + "44" }]}>
                   <View style={[s.momDot, { backgroundColor: mom.color }]} />
                   <Text style={[s.momTxt, { color: mom.color }]}>{mom.label}</Text>
                 </View>
-                {/* Consistency big */}
                 <Text style={s.consBig}>
                   {consistency}<Text style={s.consPct}>  %</Text>
                 </Text>
@@ -298,7 +278,6 @@ const FlipCard = ({ data, index }) => {
       }]}>
         <TouchableOpacity activeOpacity={1} onPress={flip} style={s.inner}>
 
-          {/* LEFT */}
           <View style={s.left}>
             {[
               { val: score.toFixed(1), lbl: "score" },
@@ -314,11 +293,9 @@ const FlipCard = ({ data, index }) => {
 
           <View style={s.vLine} />
 
-          {/* RIGHT */}
           <View style={[s.right, { justifyContent: "space-between" }]}>
 
             <View>
-              {/* Habit score bar */}
               <View style={s.barBlock}>
                 <View style={s.barHead}>
                   <Text style={s.barLbl}>Habit Score</Text>
@@ -327,7 +304,6 @@ const FlipCard = ({ data, index }) => {
                 <Bar fill={habitScore / 5} color={T.accent} />
               </View>
 
-              {/* Metric score bar */}
               <View style={[s.barBlock, { marginTop: 12 }]}>
                 <View style={s.barHead}>
                   <Text style={s.barLbl}>Metric Score</Text>
@@ -336,7 +312,6 @@ const FlipCard = ({ data, index }) => {
                 <Bar fill={metricScore / 5} color={T.blue} />
               </View>
 
-              {/* Focus time row */}
               {focusStr && (
                 <View style={[s.barBlock, { marginTop: 12 }]}>
                   <View style={s.barHead}>
@@ -347,7 +322,6 @@ const FlipCard = ({ data, index }) => {
               )}
             </View>
 
-            {/* CTA */}
             {!isWitness && (
               <TouchableOpacity
                 style={[s.cta, requested && s.ctaDone]}
@@ -393,62 +367,10 @@ const ShowcaseScreen = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      console.log("json", json)
 
-      console.log("json", json)
       setData(Array.isArray(json) ? json : []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  };
-
-  const Avatar = ({ uri, initial, style, initialStyle }) => {
-    const [hasError, setHasError] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-
-    // Reset states when URI changes
-    useEffect(() => {
-      setHasError(false);
-      setIsLoading(true);
-      console.log("[Avatar] URI changed to:", uri);
-    }, [uri]);
-
-    if (uri && !hasError) {
-      return (
-        <View style={style}>
-          <Image
-            source={{
-              uri,
-              // FIX: cache headers help with emulator image loading
-              headers: { Pragma: "no-cache" },
-            }}
-            style={[style, { position: 'absolute', top: 0, left: 0 }]}
-            resizeMode="cover"
-            onLoad={() => {
-              console.log("[Avatar] Image loaded successfully:", uri);
-              setIsLoading(false);
-            }}
-            onError={(e) => {
-              console.warn("[Avatar] Failed to load:", uri, e.nativeEvent?.error);
-              setHasError(true);
-              setIsLoading(false);
-            }}
-          />
-          {/* Show initial while loading */}
-          {isLoading && (
-            <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
-              <ActivityIndicator size="small" color={T.mid} />
-            </View>
-          )}
-        </View>
-      );
-    }
-
-    // Fallback: show initial letter
-    return (
-      <View style={[style, s.avatarFallback]}>
-        <Text style={initialStyle}>{initial || "?"}</Text>
-      </View>
-    );
   };
 
   return (
@@ -508,7 +430,6 @@ const s = StyleSheet.create({
 
   list: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 80 },
 
-  // ── Card ──
   cardOuter: { height: CARD_H, marginBottom: 20 },
   card: {
     position: "absolute", width: CARD_W, height: CARD_H,
@@ -521,7 +442,6 @@ const s = StyleSheet.create({
   cardAbs: {},
   inner: { flex: 1, flexDirection: "row" },
 
-  // ── Left ──
   left: {
     width: 130, paddingVertical: 18, paddingHorizontal: 14,
     alignItems: "center", justifyContent: "center",
@@ -542,11 +462,9 @@ const s = StyleSheet.create({
   flipRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: "auto" },
   flipTxt: { color: T.dim, fontSize: 9, fontWeight: "500" },
 
-  // ── Dividers ──
   vLine: { width: 1, backgroundColor: T.border },
   hLine: { height: 1, backgroundColor: T.border, marginVertical: 11, width: "100%" },
 
-  // ── Right ──
   right: { flex: 1, paddingVertical: 16, paddingHorizontal: 16, justifyContent: "center" },
 
   topRow: { flexDirection: "row", alignItems: "center" },
@@ -563,7 +481,6 @@ const s = StyleSheet.create({
   statNum: { color: T.text, fontSize: 14, fontWeight: "800", letterSpacing: -0.3, marginBottom: 2 },
   statLbl: { color: T.dim, fontSize: 8, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
 
-  // ── Back left ──
   backThumb: { width: 46, height: 46, borderRadius: 23, overflow: "hidden", marginBottom: 8 },
   backLetter: { color: T.mid, fontSize: 16, fontWeight: "900" },
   backName: { color: T.text, fontSize: 12, fontWeight: "800", textAlign: "center", letterSpacing: -0.2 },
@@ -571,13 +488,11 @@ const s = StyleSheet.create({
   backStatNum: { color: T.text, fontSize: 16, fontWeight: "900", letterSpacing: -0.5 },
   backStatLbl: { color: T.dim, fontSize: 8, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase", marginTop: 1 },
 
-  // ── Back right bars ──
   barBlock: {},
   barHead: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
   barLbl: { color: T.mid, fontSize: 10, fontWeight: "500", flex: 1 },
   barVal: { color: T.text, fontSize: 11, fontWeight: "700" },
 
-  // ── CTA ──
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11, backgroundColor: T.white, borderRadius: 12 },
   ctaDone: { backgroundColor: T.raised, borderWidth: 1, borderColor: T.border },
   ctaTxt: { color: T.black, fontSize: 12, fontWeight: "800" },
@@ -586,13 +501,11 @@ const s = StyleSheet.create({
   closeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
   closeTxt: { color: T.dim, fontSize: 9, fontWeight: "500" },
 
-  // ── Loading ──
   loadWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   dots: { flexDirection: "row", gap: 6 },
   dotPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: T.text },
   loadTxt: { color: T.dim, fontSize: 12, fontWeight: "500" },
 
-  // ── Empty ──
   empty: { alignItems: "center", marginTop: 80 },
   emptyIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   emptyTitle: { color: T.mid, fontSize: 17, fontWeight: "700", marginBottom: 6 },

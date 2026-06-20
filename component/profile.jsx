@@ -30,28 +30,22 @@ const T = {
 };
 
 const SERVER_BASE = (BASE_URL || "")
-  .replace(/\/+$/, "")       // remove trailing slashes
-  .replace(/\/api$/, "");    // remove /api suffix to get server root
+  .replace(/\/+$/, "")       
+  .replace(/\/api$/, "");  
 
 const resolveImageUri = (path) => {
   if (!path || typeof path !== "string" || path.trim() === "") return null;
 
-  // Already absolute URL → use as-is
   if (path.startsWith("http://") || path.startsWith("https://")) {
-    console.log("[Avatar] Using absolute URL:", path);
     return path;
   }
 
-  // Local file URI from image picker → use as-is
   if (path.startsWith("file://") || path.startsWith("content://")) {
-    console.log("[Avatar] Using local URI:", path);
     return path;
   }
 
-  // Relative server path → prepend server base
   const separator = path.startsWith("/") ? "" : "/";
   const resolved = `${SERVER_BASE}${separator}${path}`;
-  console.log("[Avatar] Resolved relative path:", path, "→", resolved);
   return resolved;
 };
 
@@ -73,16 +67,13 @@ const formatDate = (str) => {
   });
 };
 
-// ── FIX 2: Robust Avatar component ──────────────────────────────────────────
 const Avatar = ({ uri, initial, style, initialStyle }) => {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Reset states when URI changes
   useEffect(() => {
     setHasError(false);
     setIsLoading(true);
-    console.log("[Avatar] URI changed to:", uri);
   }, [uri]);
 
   if (uri && !hasError) {
@@ -91,13 +82,11 @@ const Avatar = ({ uri, initial, style, initialStyle }) => {
         <Image
           source={{
             uri,
-            // FIX: cache headers help with emulator image loading
             headers: { Pragma: "no-cache" },
           }}
           style={[style, { position: 'absolute', top: 0, left: 0 }]}
           resizeMode="cover"
           onLoad={() => {
-            console.log("[Avatar] Image loaded successfully:", uri);
             setIsLoading(false);
           }}
           onError={(e) => {
@@ -106,7 +95,6 @@ const Avatar = ({ uri, initial, style, initialStyle }) => {
             setIsLoading(false);
           }}
         />
-        {/* Show initial while loading */}
         {isLoading && (
           <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
             <ActivityIndicator size="small" color={T.mid} />
@@ -116,7 +104,6 @@ const Avatar = ({ uri, initial, style, initialStyle }) => {
     );
   }
 
-  // Fallback: show initial letter
   return (
     <View style={[style, s.avatarFallback]}>
       <Text style={initialStyle}>{initial || "?"}</Text>
@@ -194,18 +181,16 @@ const Profile = () => {
     try {
       const res = await AuthService.authFetch(UserEndpoints.GET_PROFILE);
 
-      if (res.status === 401) {
+      if (res?.status === 401) {
         await AuthService.logout();
         navigation.replace("Login");
         return;
       }
 
       const json = await res.json();
-      console.log("[Profile] API response:", JSON.stringify(json, null, 2));
 
-      if (res.ok && json.success) {
-        const userData = json.data || json.user;
-        console.log("[Profile] profilePicture field:", userData?.profilePicture);
+      if (res?.ok && json?.success) {
+        const userData = json?.data || json?.user;
         await AsyncStorage.setItem("user", JSON.stringify(userData));
         applyUser(userData);
       } else {
@@ -216,7 +201,6 @@ const Profile = () => {
       const cached = await AsyncStorage.getItem("user");
       if (cached) {
         const parsed = JSON.parse(cached);
-        console.log("[Profile] Using cached user, profilePicture:", parsed?.profilePicture);
         applyUser(parsed);
       }
     } finally {
@@ -266,10 +250,8 @@ const Profile = () => {
       includeBase64: false,
     });
 
-    console.log("[Profile] Image picker result:", result);
 
     if (result.didCancel) {
-      console.log("[Profile] User cancelled image picker");
       return;
     }
 
@@ -281,7 +263,6 @@ const Profile = () => {
 
     if (result.assets?.length) {
       const asset = result.assets[0];
-      console.log("[Profile] Selected image URI:", asset.uri);
       setSelectedImage(asset.uri);
     }
   };
@@ -298,7 +279,6 @@ const Profile = () => {
       form.append("role", editRole);
 
       if (selectedImage) {
-        // FIX: Ensure proper URI format for Android
         const uri = Platform.OS === "android"
           ? selectedImage
           : selectedImage.replace("file://", "");
@@ -308,24 +288,18 @@ const Profile = () => {
           type: "image/jpeg",
           name: "profile.jpg",
         });
-        console.log("[Profile] Appending image with URI:", uri);
       }
 
-      console.log("[Profile] Saving to:", UserEndpoints.UPDATE(userId));
 
       const res = await AuthService.authFetch(UserEndpoints.UPDATE(userId), {
         method: "PUT",
         body: form,
-        // ✅ No Content-Type header — authService handles FormData detection
       });
 
-      console.log("[Profile] Save response status:", res.status);
       const json = await res.json();
-      console.log("[Profile] Save response body:", JSON.stringify(json, null, 2));
 
-      if (res.ok && json.success) {
-        const updatedUser = json.data || json.user;
-        console.log("[Profile] Updated profilePicture:", updatedUser?.profilePicture);
+      if (res?.ok && json?.success) {
+        const updatedUser = json?.data || json?.user;
         await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
         applyUser(updatedUser);
         setSelectedImage(null);
@@ -335,7 +309,6 @@ const Profile = () => {
         Alert.alert("Error", json.message || "Failed to update profile");
       }
     } catch (err) {
-      console.log("[Profile] Save error:", err);
       Alert.alert("Error", err.message || "Failed to update profile");
     } finally {
       setUploading(false);
@@ -382,15 +355,11 @@ const Profile = () => {
 
   const initial = (user?.name || "?").charAt(0).toUpperCase();
 
-  // FIX 3: Use module-level resolveImageUri (not the duplicate inside component)
-  // selectedImage (local picker URI) takes priority over server URL
   const avatarUri = resolveImageUri(user?.profilePicture);
   const modalAvatarUri = selectedImage
-    ? resolveImageUri(selectedImage)   // local file:// URI from picker
-    : avatarUri;                       // server URL
+    ? resolveImageUri(selectedImage)   
+    : avatarUri;                     
 
-  console.log("[Profile] avatarUri:", avatarUri);
-  console.log("[Profile] modalAvatarUri:", modalAvatarUri);
 
   return (
     <SafeAreaView style={s.wrap} edges={["top"]}>
@@ -398,7 +367,6 @@ const Profile = () => {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* ── Hero block ── */}
         <View style={s.hero}>
           <View style={s.avatarSection}>
             <TouchableOpacity style={s.avatarOuter} onPress={openEditModal} activeOpacity={0.85}>
@@ -477,7 +445,6 @@ const Profile = () => {
 
       </ScrollView>
 
-      {/* ══════════ EDIT MODAL ══════════ */}
       <Modal visible={modalVisible} animationType="slide" transparent
         onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView
@@ -520,7 +487,6 @@ const Profile = () => {
                     <Text style={s.pickerHint}>
                       {selectedImage ? "✓ New photo selected" : "Tap to change your photo"}
                     </Text>
-                    {/* FIX: Debug helper - shows what URI we're using */}
                     {__DEV__ && (
                       <Text style={{ color: T.dim, fontSize: 9, marginTop: 4 }} numberOfLines={2}>
                         {modalAvatarUri || "no uri"}

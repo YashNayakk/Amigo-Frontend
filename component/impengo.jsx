@@ -7,8 +7,9 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WitnessEndpoints, CommitmentPodEndpoints } from '../services/apis';
 import { useNavigation } from '@react-navigation/native';
-import  MMKV  from 'react-native-mmkv';
+import MMKV from 'react-native-mmkv';
 import AuthService from '../services/authService';
+import { BASE_URL } from 'react-native-dotenv';
 
 const T = {
   bg: '#080808', surface: '#101010', raised: '#181818',
@@ -17,14 +18,58 @@ const T = {
   white: '#ffffff', black: '#000000',
 };
 
-// ── Shared MMKV instance ──────────────────────────────────────────────────────
-let _storage = null;
-const getStorage = ()=>{
-  if(!_storage){
-    _storage = new MMKV({id: 'chat-storage'});
-    return _storage;
+const SERVER_BASE = (BASE_URL || '')
+  .replace(/\/+$/, '')
+  .replace(/\/api$/, '');
+
+const resolveImageUri = (path) => {
+  if (!path || typeof path !== 'string' || path.trim() === '') return null;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (path.startsWith('file://') || path.startsWith('content://')) return path;
+  const separator = path.startsWith('/') ? '' : '/';
+  return `${SERVER_BASE}${separator}${path}`;
+};
+
+const Avatar = ({ uri, initial, style, initialStyle }) => {
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setHasError(false);
+    setIsLoading(true);
+  }, [uri]);
+
+  if (uri && !hasError) {
+    return (
+      <View style={style}>
+        <Image
+          source={{ uri, headers: { Pragma: 'no-cache' } }}
+          style={[style, { position: 'absolute', top: 0, left: 0 }]}
+          resizeMode="cover"
+          onLoad={() => setIsLoading(false)}
+          onError={() => { setHasError(true); setIsLoading(false); }}
+        />
+        {isLoading && (
+          <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
+            <ActivityIndicator size="small" color={T.mid} />
+          </View>
+        )}
+      </View>
+    );
   }
-}
+
+  return (
+    <View style={[style, s.avatarFallback]}>
+      <Text style={initialStyle}>{initial || '?'}</Text>
+    </View>
+  );
+};
+
+let _storage = null;
+const getStorage = () => {
+  if (!_storage) { _storage = new MMKV({ id: 'chat-storage' }); }
+  return _storage;
+};
 const CACHE_CONNECTIONS = 'chat_connections_v1';
 const CACHE_PODS        = 'chat_pods_v1';
 
@@ -39,17 +84,13 @@ const fmtDate = dateString => {
 };
 
 const readCache = (key) => {
-  try {
-    const raw = getStorage().getString(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  try { const raw = getStorage().getString(key); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
 };
-
 const writeCache = (key, value) => {
   try { getStorage().set(key, JSON.stringify(value)); } catch { /* ignore */ }
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
 const ChatListScreen = () => {
   const navigation = useNavigation();
 
@@ -57,7 +98,6 @@ const ChatListScreen = () => {
   const [searchQuery, setSearchQuery]   = useState('');
   const [connections, setConnections]   = useState([]);
   const [pods, setPods]                 = useState([]);
-  // loading is only true on the very first open when cache is also empty
   const [loading, setLoading]           = useState(false);
   const [refreshing, setRefreshing]     = useState(false);
 
@@ -65,29 +105,19 @@ const ChatListScreen = () => {
 
   useEffect(() => { loadAll(); }, []);
 
-  // ── Main loader ─────────────────────────────────────────────────────────────
   const loadAll = async () => {
-    // 1. Paint from cache immediately (synchronous MMKV read)
     const cachedConnections = readCache(CACHE_CONNECTIONS);
     const cachedPods        = readCache(CACHE_PODS);
-
     if (cachedConnections) setConnections(cachedConnections);
     if (cachedPods)        setPods(cachedPods);
-
-    // 2. Show full-screen loader only if both caches are cold
-    const hasCachedData = cachedConnections || cachedPods;
-    if (!hasCachedData) setLoading(true);
-
-    // 3. Fetch fresh data in background
+    if (!cachedConnections && !cachedPods) setLoading(true);
     await Promise.all([loadConnections(), loadPods()]);
-
     setLoading(false);
   };
 
-  // ── Connections ─────────────────────────────────────────────────────────────
   const loadConnections = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await AsyncStorage.getItem('token');
       const res   = await AuthService.authFetch(WitnessEndpoints.GET_CONNECTIONS, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
@@ -97,7 +127,7 @@ const ChatListScreen = () => {
           _id:      conn?.user?._id || conn?.user?.id,
           chatId:   conn?.relationId,
           name:     conn?.user?.name,
-          avatar:   conn?.user?.profilePicture,
+          avatar:   conn?.user?.profilePicture,   // raw path — resolved at render time
           message:  'Tap to share activities',
           time:     fmtDate(conn?.createdAt),
           unread:   0,
@@ -108,16 +138,14 @@ const ChatListScreen = () => {
         writeCache(CACHE_CONNECTIONS, formatted);
       }
     } catch (err) {
-      // Network error — cached data already shown, nothing extra needed
-      console.warn('loadConnections offline, showing cache:', err.message);
+      console.warn('loadConnections offline:', err.message);
     }
   };
 
-  // ── Pods ────────────────────────────────────────────────────────────────────
   const loadPods = async () => {
     try {
-      const token  = await AsyncStorage.getItem("token");
-      const userId = await AsyncStorage.getItem("userId");
+      const token  = await AsyncStorage.getItem('token');
+      const userId = await AsyncStorage.getItem('userId');
 
       const [myPodsRes, witnessPodsRes] = await Promise.all([
         AuthService.authFetch(CommitmentPodEndpoints.MY_PODS,  { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
@@ -160,9 +188,7 @@ const ChatListScreen = () => {
             chatId:    pod._id,
             name:      pod.podName || `${pod.customType} Pod`,
             avatar:    null,
-            message:   isPending
-              ? 'You have a pending invite'
-              : `${pod.witnesses?.length || 0} witnesses · ${pod.TimePeriod} days`,
+            message:   isPending ? 'You have a pending invite' : `${pod.witnesses?.length || 0} witnesses · ${pod.TimePeriod} days`,
             time:      fmtDate(pod.updatedAt || pod.createdAt),
             unread:    isPending ? 1 : 0,
             type:      'pod',
@@ -181,18 +207,16 @@ const ChatListScreen = () => {
       setPods(merged);
       writeCache(CACHE_PODS, merged);
     } catch (err) {
-      console.warn('loadPods offline, showing cache:', err.message);
+      console.warn('loadPods offline:', err.message);
     }
   };
 
-  // ── Pull-to-refresh ─────────────────────────────────────────────────────────
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([loadConnections(), loadPods()]);
     setRefreshing(false);
   }, []);
 
-  // ── Derived list ────────────────────────────────────────────────────────────
   const getCombined = () => {
     let list =
       activeFilter === 'Witness' ? [...connections] :
@@ -215,63 +239,67 @@ const ChatListScreen = () => {
     }
   };
 
-  // ── Render item ─────────────────────────────────────────────────────────────
-  const renderItem = ({ item }) => (
-    <TouchableOpacity style={s.row} onPress={() => handlePress(item)} activeOpacity={0.75}>
+  const renderItem = ({ item }) => {
+    const resolvedAvatar = resolveImageUri(item.avatar);
+    const initial = item.name?.charAt(0)?.toUpperCase() || '?';
 
-      <View style={s.avatarWrap}>
-        {item.type === 'pod' ? (
-          <View style={[s.avatarCircle, s.podCircle]}>
-            <Icon name="people" size={20} color={T.mid} />
-          </View>
-        ) : item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={s.avatarImg} />
-        ) : (
-          <View style={s.avatarCircle}>
-            <Text style={s.avatarInitial}>{item.name?.charAt(0)?.toUpperCase()}</Text>
-          </View>
-        )}
-        {item.type === 'pod' && (
-          <View style={s.podBadge}>
-            <Icon name="shield-checkmark" size={8} color={T.black} />
-          </View>
-        )}
-      </View>
+    return (
+      <TouchableOpacity style={s.row} onPress={() => handlePress(item)} activeOpacity={0.75}>
 
-      <View style={s.rowContent}>
-        <View style={s.rowTop}>
-          <View style={s.nameWrap}>
-            <Text style={s.rowName} numberOfLines={1}>{item.name}</Text>
-            {item.type === 'pod' && (
-              <View style={s.podTag}>
-                <Text style={s.podTagText}>POD</Text>
-              </View>
-            )}
-          </View>
-          <Text style={s.rowTime}>{item.time}</Text>
-        </View>
-        <View style={s.rowBottom}>
-          <Text style={[s.rowPreview, item.unread > 0 && s.rowPreviewBold]} numberOfLines={1}>
-            {item.message}
-          </Text>
-          {item.unread > 0 && (
-            <View style={s.unreadBadge}>
-              <Text style={s.unreadText}>{item.unread}</Text>
+        <View style={s.avatarWrap}>
+          {item.type === 'pod' ? (
+            <View style={[s.avatarCircle, s.podCircle]}>
+              <Icon name="people" size={20} color={T.mid} />
+            </View>
+          ) : (
+            <Avatar
+              uri={resolvedAvatar}
+              initial={initial}
+              style={s.avatarCircle}
+              initialStyle={s.avatarInitial}
+            />
+          )}
+          {item.type === 'pod' && (
+            <View style={s.podBadge}>
+              <Icon name="shield-checkmark" size={8} color={T.black} />
             </View>
           )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
 
-  // ── Full-screen loader (cold start, no cache) ───────────────────────────────
+        <View style={s.rowContent}>
+          <View style={s.rowTop}>
+            <View style={s.nameWrap}>
+              <Text style={s.rowName} numberOfLines={1}>{item.name}</Text>
+              {item.type === 'pod' && (
+                <View style={s.podTag}>
+                  <Text style={s.podTagText}>POD</Text>
+                </View>
+              )}
+            </View>
+            <Text style={s.rowTime}>{item.time}</Text>
+          </View>
+          <View style={s.rowBottom}>
+            <Text style={[s.rowPreview, item.unread > 0 && s.rowPreviewBold]} numberOfLines={1}>
+              {item.message}
+            </Text>
+            {item.unread > 0 && (
+              <View style={s.unreadBadge}>
+                <Text style={s.unreadText}>{item.unread}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+      </TouchableOpacity>
+    );
+  };
+
   if (loading) return (
     <View style={[s.wrap, s.center]}>
       <ActivityIndicator size="large" color={T.text} />
     </View>
   );
 
-  // ── UI ──────────────────────────────────────────────────────────────────────
   return (
     <View style={s.wrap}>
 
@@ -285,7 +313,6 @@ const ChatListScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
       <View style={s.searchBar}>
         <Icon name="search-outline" size={16} color={T.dim} style={{ marginRight: 10 }} />
         <TextInput style={s.searchInput} placeholder="Search connections"
@@ -375,9 +402,10 @@ const s = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20, backgroundColor: T.bg },
   rowSep: { height: 1, backgroundColor: T.border, marginLeft: 78 },
+
   avatarWrap: { marginRight: 14, position: 'relative' },
-  avatarImg: { width: 50, height: 50, borderRadius: 25 },
-  avatarCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center' },
+  avatarCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarFallback: { backgroundColor: T.raised, alignItems: 'center', justifyContent: 'center' },
   podCircle: { backgroundColor: T.surface },
   avatarInitial: { fontSize: 19, fontWeight: '700', color: T.mid },
   podBadge: { position: 'absolute', bottom: -1, right: -1, width: 17, height: 17, borderRadius: 9, backgroundColor: T.white, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: T.bg },

@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    TouchableOpacity, Dimensions, ActivityIndicator, Image,
+    TouchableOpacity, Dimensions, Image,
     RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import { PerformanceEndpoints, HabitEndpoints } from '../services/apis';
-import { getSocket } from '../services/SocketService';
 import AuthService from '../services/authService';
 
 
@@ -78,7 +77,6 @@ const buildYesNoWeeklyChart = (habit, windowDays) => {
     const logs = habit?.logs;
     if (!logs || logs.length === 0) return null;
 
-    // Determine how many weeks to show based on windowDays
     const weeksToShow = windowDays <= 7 ? 1 : windowDays <= 30 ? 4 : 8;
 
     const today = new Date();
@@ -213,7 +211,6 @@ const HabitGraphCard = React.memo(({ habit, color, windowDays }) => {
 
     return (
         <View style={hgc.card}>
-            {/* Header */}
             <View style={hgc.header}>
                 <View style={[hgc.bar, { backgroundColor: color }]} />
                 <View style={{ flex: 1 }}>
@@ -225,7 +222,6 @@ const HabitGraphCard = React.memo(({ habit, color, windowDays }) => {
                 </View>
             </View>
 
-            {/* Pills */}
             <View style={hgc.pillRow}>
                 {habit.streak > 0 && (
                     <View style={[hgc.pill, { borderColor: color + '55' }]}>
@@ -244,7 +240,6 @@ const HabitGraphCard = React.memo(({ habit, color, windowDays }) => {
                 }
             </View>
 
-            {/* Axis hint */}
             <Text style={hgc.axisHint}>
                 {isYesNo ? 'days completed per week' : habit.unit}
             </Text>
@@ -387,7 +382,6 @@ const Performance = () => {
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const d = new Date(); d.setDate(1); return d;
     });
-    ///const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
@@ -395,7 +389,6 @@ const Performance = () => {
     }, []);
 
     const fetchData = async () => {
-        //setLoading(true)
         try {
             const token = await AsyncStorage.getItem('token');
             const headers = { Authorization: `Bearer ${token}` };
@@ -425,20 +418,12 @@ const Performance = () => {
             setHabits(merged);
         } catch (err) {
             console.error('Performance fetch error:', err);
-        } finally {
-            //setLoading(false)
         }
 
     };
 
-    /*if (loading) {
-        return (
-            <View style={[s.container, s.centered]}>
-                <ActivityIndicator size="large" color="#7CFF9B" />
-                <Text style={s.loadingTxt}>Loading performance…</Text>
-            </View>
-        );
-    }*/
+     
+    
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -486,7 +471,6 @@ const Performance = () => {
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }>
 
-            {/* Header */}
             <View style={s.header}>
                 <View style={s.headerRow}>
                     <View>
@@ -496,14 +480,12 @@ const Performance = () => {
                 </View>
             </View>
 
-            {/* Overall score */}
             <View style={s.scoreCard}>
                 <Text style={s.scoreLabel}>Overall Score</Text>
                 <Text style={s.scoreBig}>{fmt1(stats.finalScore)}</Text>
                 
             </View>
 
-            {/* Stats grid */}
             <View style={s.statsGrid}>
                 {[
                     { label: 'Streak', value: `${stats.currentStreak}d` },
@@ -520,7 +502,6 @@ const Performance = () => {
                 ))}
             </View>
 
-            {/* Metric Score Graph */}
             <View style={s.section}>
                 <Text style={s.sectionTitle}>Check-in</Text>
                 <Text style={s.sectionSub}>From your daily check-in's</Text>
@@ -553,7 +534,6 @@ const Performance = () => {
                 </View>
             </View>
 
-            {/* Habit Graphs */}
             <View style={s.section}>
                 <Text style={s.sectionTitle}>Habits</Text>
                 <Text style={s.sectionSub}>
@@ -578,7 +558,6 @@ const Performance = () => {
                 )}
             </View>
 
-            {/* Mascot insight */}
             <View style={s.insightRow}>
                 <Image source={require('../Images/mascoti.png')} style={s.mascot} resizeMode="contain" />
                 <View style={s.insightBubble}>
@@ -587,7 +566,6 @@ const Performance = () => {
                 </View>
             </View>
 
-            {/* Monthly Calendar */}
             <View style={s.section}>
                 <Text style={s.sectionTitle}>Calender</Text>
                 <Text style={s.sectionSub}>Tap ‹ › to browse months</Text>

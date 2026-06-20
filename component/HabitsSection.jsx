@@ -154,7 +154,6 @@ export default function HabitsScreen() {
       });
       const  data = await res.json();
       setHabits(data);
-      console.log("habits", data)
     } catch (e) {
       console.error(e);
     }
@@ -168,8 +167,6 @@ export default function HabitsScreen() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("Deleted habit", habitId);
-      console.log("Delete response", res);
       await loadHabits();
     } catch (e) {
       console.error(e);
@@ -268,7 +265,7 @@ export default function HabitsScreen() {
             <Text style={s.emptyTitle}>loading Habits...</Text>
             <Text style={s.emptyDesc}>Please wait while we load the habit</Text>
           </View>
-        ) : habits.length === 0 ? (
+        ) : habits?.length === 0 ? (
         <View style={s.emptyState}>
           <View style={s.emptyRing}>
             <Icon name="repeat-outline" size={28} color={T.mid} />
@@ -276,7 +273,7 @@ export default function HabitsScreen() {
           <Text style={s.emptyTitle}>No habits yet</Text>
           <Text style={s.emptyDesc}>Tap "New Habit" to start building your streak</Text>
         </View>
-        ) : habits.map((habit) => (
+        ) : habits?.map((habit) => (
         <View key={habit._id}>
           <View style={s.habitRow}>
 
@@ -292,7 +289,7 @@ export default function HabitsScreen() {
               </View>
             </View>
 
-            {days.map(day => (
+            {days?.map(day => (
               <View key={day.date} style={s.dayCell}>
                 <DayCell habit={habit} day={day} onPress={() => openLog(habit, day)} />
               </View>
@@ -345,7 +342,6 @@ export default function HabitsScreen() {
             <View style={[s.sheet, s.sheetTall]}>
               <View style={s.sheetPill} />
 
-              {/* Sheet header */}
               <View style={s.sheetHeader}>
                 <View>
                   <Text style={s.eyebrow}>{habitType === 'yesno' ? 'YES / NO' : 'MEASURABLE'}</Text>
@@ -363,7 +359,6 @@ export default function HabitsScreen() {
                   contentContainerStyle={{ paddingBottom: 8 }}
                 >
 
-                  {/* Name */}
                   <View style={s.fieldBox}>
                     <Text style={s.fieldLabel}>HABIT NAME</Text>
                     <TextInput
@@ -376,7 +371,6 @@ export default function HabitsScreen() {
                     />
                   </View>
 
-                  {/* Measurable fields */}
                   {habitType === 'measurable' && (
                     <>
                       <View style={s.fieldRow}>
@@ -413,7 +407,6 @@ export default function HabitsScreen() {
                     </>
                   )}
 
-                  {/* Frequency */}
                   <View style={s.fieldBox}>
                     <Text style={s.fieldLabel}>FREQUENCY</Text>
                     <View style={{ flexDirection: 'row', marginTop: 2 }}>
@@ -422,7 +415,6 @@ export default function HabitsScreen() {
                     </View>
                   </View>
 
-                  {/* Description */}
                   <View style={s.fieldBox}>
                     <Text style={s.fieldLabel}>DESCRIPTION</Text>
                     <TextInput
@@ -435,7 +427,6 @@ export default function HabitsScreen() {
                     />
                   </View>
 
-                  {/* Question */}
                   <View style={s.fieldBox}>
                     <Text style={s.fieldLabel}>CUSTOM QUESTION <Text style={{ color: T.dim }}>— OPTIONAL</Text></Text>
                     <TextInput
@@ -450,7 +441,6 @@ export default function HabitsScreen() {
                   <View style={{ height: 20 }} />
                 </ScrollView>
               </View>
-              {/* Bottom bar */}
               <View style={s.bar}>
                 <TouchableOpacity style={s.barBack} onPress={() => setShowFormModal(false)}>
                   <Icon name="arrow-back" size={17} color={T.mid} />
@@ -480,7 +470,6 @@ export default function HabitsScreen() {
           <View style={s.sheet}>
             <View style={s.sheetPill} />
 
-            {/* Context */}
             <View style={s.logContext}>
               <View style={s.logIconWrap}>
                 <Icon name="pencil-outline" size={20} color={T.text} />
@@ -504,7 +493,6 @@ export default function HabitsScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              /* Measurable input */
               <View style={s.fieldBox}>
                 <Text style={s.fieldLabel}>ENTER VALUE</Text>
                 <View style={s.measRow}>
@@ -549,14 +537,12 @@ const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.bg },
   scroll: { flex: 1 },
 
-  // Header
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: T.border },
   eyebrow: { color: T.dim, fontSize: 9, fontWeight: '700', letterSpacing: 2, marginBottom: 2 },
   headerTitle: { color: T.text, fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: T.white, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12 },
   addBtnText: { color: T.black, fontSize: 13, fontWeight: '800', letterSpacing: -0.1 },
 
-  // Table head
   tableHead: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
   dayHeadCol: { width: 52, alignItems: 'center', gap: 4 },
   dayHeadName: { color: T.dim, fontSize: 8, fontWeight: '700', letterSpacing: 1.5 },
@@ -564,7 +550,6 @@ const s = StyleSheet.create({
   dayHeadNumText: { color: T.mid, fontSize: 12, fontWeight: '700' },
   divider: { height: 1, backgroundColor: T.border, marginHorizontal: 20 },
 
-  // Habit rows
   habitRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 0 },
   habitInfo: { flex: 1, paddingRight: 8 },
   habitName: { color: T.text, fontSize: 14, fontWeight: '700', letterSpacing: -0.2, marginBottom: 5 },
@@ -575,7 +560,6 @@ const s = StyleSheet.create({
   dayCell: { width: 52, alignItems: 'center',},
   rowDivider: { height: 1, backgroundColor: T.border, marginHorizontal: 20 },
 
-  // Empty state
   emptyState: { alignItems: 'center', paddingVertical: 72 },
   emptyRing: { width: 72, height: 72, borderRadius: 36, backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { color: T.mid, fontSize: 16, fontWeight: '700', marginBottom: 6 },

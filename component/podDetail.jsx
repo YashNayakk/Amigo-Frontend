@@ -123,7 +123,6 @@ const PodDetailScreen = () => {
     };
   }, []);
 
-  // Replace your existing handleShareCard with this:
   const handleShareCard = async () => {
     if (!activityName.trim() || satisfactionLevel === 0) return;
     setSubmitting(true);
@@ -195,12 +194,12 @@ const PodDetailScreen = () => {
       }).then(r => r.json());
 
       if (res?.success) {
-        setPod(res.pod);
+        setPod(res?.pod);
         if (podStatus !== 'admin') {
           const myEntry = res.pod?.witnesses?.find(
             w => w?.user?._id?.toString() === userId || w?.user?.id?.toString() === userId
           );
-          if (myEntry?.status) setMyStatus(myEntry.status);
+          if (myEntry?.status) setMyStatus(myEntry?.status);
         }
         const effectiveStatus = podStatus === 'admin' ? 'admin' : (() => {
           const myEntry = res.pod?.witnesses?.find(
@@ -223,7 +222,7 @@ const PodDetailScreen = () => {
       const res = await AuthService.authFetch(CommitmentPodEndpoints.SHARE_CARDS(podId), {
         headers: { Authorization: `Bearer ${t}` },
       }).then(r => r.json());
-      if (res?.success) setCards(res.cards || []);
+      if (res?.success) setCards(res?.cards || []);
     } catch (err) { console.error('loadCards:', err); }
   };
 
@@ -233,7 +232,7 @@ const PodDetailScreen = () => {
       const res = await AuthService.authFetch(CommitmentPodEndpoints.CARD_STATS(podId), {
         headers: { Authorization: `Bearer ${t}` },
       }).then(r => r.json());
-      if (res?.success) setStats(res.stats);
+      if (res?.success) setStats(res?.stats);
     } catch (err) { console.error('loadStats:', err); }
   };
 
@@ -244,7 +243,7 @@ const PodDetailScreen = () => {
       const res = await AuthService.authFetch(CommitmentPodEndpoints.STREAKS(podId), {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
-      if (res?.success) setStreaks(res.streaks || []);
+      if (res?.success) setStreaks(res?.streaks || []);
     } catch (err) { console.error('loadStreaks:', err); }
     finally { setStreaksLoading(false); }
   };
@@ -301,10 +300,10 @@ const PodDetailScreen = () => {
                 headers: { Authorization: `Bearer ${token}` },
               }).then(r => r.json());
               if (res?.success) {
-                // Update pod witnesses locally — no full reload needed
+
                 setPod(prev => ({
                   ...prev,
-                  witnesses: prev.witnesses.map(w =>
+                  witnesses: prev?.witnesses.map(w =>
                     (w?.user?._id || w?.user?.id) === witnessUserId
                       ? { ...w, status: 'removed' }
                       : w
@@ -378,26 +377,7 @@ const PodDetailScreen = () => {
       ]
     );
   };
-  {/*
-  const handleShareCard = async () => {
-    if (!activityName.trim() || satisfactionLevel === 0) return;
-    try {
-      setSubmitting(true);
-      const token = await AsyncStorage.getItem('token');
-      const res = await fetch(CommitmentPodEndpoints.SHARE_CARDS(podId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ activityName, satisfactionLevel, customMessage }),
-      }).then(r => r.json());
-      if (res?.success) {
-        setShowShareModal(false);
-        setActivityName(''); setSatisfactionLevel(0); setCustomMessage('');
-        loadCards();
-        loadStats();
-      } else Alert.alert('Error', res?.error || 'Failed to share');
-    } catch { Alert.alert('Error', 'Something went wrong'); }
-    finally { setSubmitting(false); }
-  }; */}
+ 
 
   if (loading) return (
     <View style={[s.wrap, s.center]}>
@@ -496,7 +476,6 @@ const PodDetailScreen = () => {
   return (
     <View style={s.wrap}>
 
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.iconBtn} onPress={() => navigation.goBack()}>
           <Icon name="arrow-back" size={17} color={T.mid} />
@@ -505,7 +484,6 @@ const PodDetailScreen = () => {
           <Text style={s.podHeaderName} numberOfLines={1}>{pod?.podName || pod?.customType}</Text>
           {pod?.podName && <Text style={s.podHeaderCat}>{pod?.customType}</Text>}
         </View>
-        {/* Admin: trash icon. Witness: leave icon */}
         {isAdmin ? (
           <TouchableOpacity style={[s.iconBtn, s.iconBtnDanger]} onPress={handleDeletePod} disabled={actionLoading}>
             <Icon name="trash-outline" size={17} color="#ff6b6b" />
@@ -517,7 +495,6 @@ const PodDetailScreen = () => {
         )}
       </View>
 
-      {/* Stats banner */}
       <View style={s.banner}>
         {[
           { val: pod?.TimePeriod, label: 'Days', icon: 'time-outline' },
@@ -535,7 +512,6 @@ const PodDetailScreen = () => {
         ))}
       </View>
 
-      {/* ── NEW: Streaks bar — visible to everyone ─────────────────────── */}
       <TouchableOpacity style={s.streaksBar} onPress={handleOpenStreaks} activeOpacity={0.75}>
         <View style={s.streaksBarLeft}>
           <Text style={s.streaksBarLabel}>Pod Streaks</Text>
@@ -543,7 +519,6 @@ const PodDetailScreen = () => {
         <Icon name="chevron-forward" size={14} color={T.dim} />
       </TouchableOpacity>
 
-      {/* Feed */}
       <FlatList
         data={cards}
         keyExtractor={item => item._id || String(Math.random())}
@@ -551,7 +526,6 @@ const PodDetailScreen = () => {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
-            {/* Rules chips */}
             {pod?.rules?.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 {pod.rules.map((rule, i) => (
@@ -562,7 +536,6 @@ const PodDetailScreen = () => {
               </ScrollView>
             )}
 
-            {/* ── NEW: Witnesses section with remove button for admin ── */}
             <View style={s.witnessesSectionHeader}>
               <Text style={s.sectionLabel}>WITNESSES</Text>
             </View>
@@ -580,7 +553,6 @@ const PodDetailScreen = () => {
                     <View style={[s.statusDot, { backgroundColor: statusColor(w.status) }]} />
                     <Text style={[s.statusText, { color: statusColor(w.status) }]}>{w.status}</Text>
                   </View>
-                  {/* Remove button — admin only, only for active witnesses */}
                   {isAdmin && !isRemoved && (
                     <TouchableOpacity
                       style={s.removeWitnessBtn}
@@ -636,12 +608,10 @@ const PodDetailScreen = () => {
         }
       />
 
-      {/* FAB */}
       <TouchableOpacity style={s.fab} onPress={() => setShowShareModal(true)} activeOpacity={0.85}>
         <Icon name="add" size={26} color={T.black} />
       </TouchableOpacity>
 
-      {/* ── NEW: Streaks modal ─────────────────────────────────────────── */}
       <Modal visible={showStreaksModal} transparent animationType="slide">
         <View style={s.overlay}>
           <View style={s.sheet}>
@@ -662,20 +632,17 @@ const PodDetailScreen = () => {
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
                 {streaks
-                  .sort((a, b) => b.streak - a.streak) // highest streak first
+                  .sort((a, b) => b.streak - a.streak) 
                   .map((member, i) => (
                     <View key={member.user._id} style={s.streakRow}>
-                      {/* Rank */}
                       <Text style={s.streakRank}>#{i + 1}</Text>
 
-                      {/* Avatar */}
                       <View style={[s.streakAvatar, member.activeToday && s.streakAvatarActive]}>
                         <Text style={s.streakInitial}>
                           {member.user.name?.charAt(0)?.toUpperCase() || '?'}
                         </Text>
                       </View>
 
-                      {/* Name + role */}
                       <View style={s.streakMeta}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={s.streakName}>{member.user.name}</Text>
@@ -688,7 +655,6 @@ const PodDetailScreen = () => {
                         <Text style={s.streakCards}>{member.totalCards} cards total</Text>
                       </View>
 
-                      {/* Streak count + fire indicator */}
                       <View style={s.streakRight}>
                         <View style={s.streakCountRow}>
                           <Text style={[s.streakCount, member.streak === 0 && { color: T.dim }]}>
@@ -700,16 +666,16 @@ const PodDetailScreen = () => {
                                 member.activeToday ? '🔥' : '🔥'}
                           </Text>
                         </View>
-                        {member.streak > 0 && (
+                        {member?.streak > 0 && (
                           <Text style={s.streakBest}>best {member.bestStreak}</Text>
                         )}
-                        {member.atRisk && (
+                        {member?.atRisk && (
                           <Text style={s.streakAtRisk}>at risk</Text>
                         )}
                       </View>
                     </View>
                   ))}
-                {streaks.length === 0 && (
+                {streaks?.length === 0 && (
                   <View style={s.streaksEmpty}>
                     <Text style={s.streaksEmptyText}>No streaks yet — share a card to start one!</Text>
                   </View>
@@ -721,7 +687,6 @@ const PodDetailScreen = () => {
         </View>
       </Modal>
 
-      {/* Share card modal (unchanged) */}
       <Modal visible={showShareModal} transparent animationType="slide">
         <View style={s.overlay}>
           <View style={s.sheet}>
@@ -792,12 +757,10 @@ const PodDetailScreen = () => {
 
 export default PodDetailScreen;
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.bg },
   center: { justifyContent: 'center', alignItems: 'center' },
 
-  // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingTop: 52, paddingBottom: 14,
@@ -810,20 +773,18 @@ const s = StyleSheet.create({
   podHeaderName: { color: T.text, fontSize: 17, fontWeight: '900', letterSpacing: -0.3 },
   podHeaderCat: { color: T.dim, fontSize: 11, marginTop: 2, letterSpacing: 0.3 },
 
-  // Banner
+  
   banner: { flexDirection: 'row', backgroundColor: T.surface, borderBottomWidth: 1, borderBottomColor: T.border },
   bannerCell: { flex: 1, alignItems: 'center', paddingVertical: 18 },
   bannerVal: { color: T.text, fontSize: 22, fontWeight: '900', letterSpacing: -1 },
   bannerLabel: { color: T.dim, fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginTop: 3 },
   bannerDiv: { width: 1, backgroundColor: T.border, marginVertical: 14 },
 
-  // NEW: Streaks bar
   streaksBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: T.surface, borderBottomWidth: 1, borderBottomColor: T.border },
   streaksBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   streaksBarEmoji: { fontSize: 16 },
   streaksBarLabel: { color: T.text, fontSize: 14, fontWeight: '700' },
 
-  // Invite
   inviteScroll: { paddingHorizontal: 20, paddingBottom: 48 },
   inviteHero: { alignItems: 'center', paddingVertical: 32 },
   inviteRing: { width: 70, height: 70, borderRadius: 35, backgroundColor: T.raised, borderWidth: 1, borderColor: T.hi, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
@@ -848,7 +809,6 @@ const s = StyleSheet.create({
   ruleNumText: { color: T.dim, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   ruleText: { color: T.mid, fontSize: 14, flex: 1, lineHeight: 21 },
 
-  // Witnesses
   witnessesSectionHeader: { marginBottom: 12 },
   witnessRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: T.border },
   witnessRowDim: { opacity: 0.4 },
@@ -862,7 +822,6 @@ const s = StyleSheet.create({
 
   feedDivider: { height: 1, backgroundColor: T.border, marginVertical: 20 },
 
-  // Feed
   feedPad: { padding: 16, paddingBottom: 110 },
   ruleChip: { backgroundColor: T.raised, borderWidth: 1, borderColor: T.border, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginRight: 8 },
   ruleChipText: { color: T.mid, fontSize: 11 },
@@ -892,7 +851,6 @@ const s = StyleSheet.create({
     shadowOpacity: 0.08, shadowRadius: 10, elevation: 6,
   },
 
-  // NEW: Streaks modal rows
   streaksSubtitle: { color: T.dim, fontSize: 13, marginBottom: 20 },
   streaksLoading: { paddingVertical: 60, alignItems: 'center' },
   streakRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border },
@@ -914,7 +872,6 @@ const s = StyleSheet.create({
   streaksEmpty: { alignItems: 'center', paddingVertical: 40 },
   streaksEmptyText: { color: T.dim, fontSize: 13, textAlign: 'center' },
 
-  // Modal (shared)
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: T.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, maxHeight: '90%', borderTopWidth: 1, borderColor: T.border },
   sheetPill: { width: 36, height: 4, borderRadius: 2, backgroundColor: T.hi, alignSelf: 'center', marginBottom: 20 },

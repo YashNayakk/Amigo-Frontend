@@ -5,7 +5,6 @@ import {
 import React, { useEffect, useState } from "react";
 import { WitnessEndpoints } from "../services/apis";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
 import { BASE_URL } from 'react-native-dotenv';
 import AuthService from "../services/authService";
 
@@ -25,34 +24,26 @@ const T = {
 };
 
 const SERVER_BASE = (BASE_URL || "")
-  .replace(/\/+$/, "")       // remove trailing slashes
-  .replace(/\/api$/, "");    // remove /api suffix to get server root
+  .replace(/\/+$/, "")       
+  .replace(/\/api$/, "");    
 
 const resolveImageUri = (path) => {
   if (!path || typeof path !== "string" || path.trim() === "") return null;
 
-  // Already absolute URL → use as-is
   if (path.startsWith("http://") || path.startsWith("https://")) {
-    console.log("[Avatar] Using absolute URL:", path);
     return path;
   }
 
-  // Local file URI from image picker → use as-is
   if (path.startsWith("file://") || path.startsWith("content://")) {
-    console.log("[Avatar] Using local URI:", path);
     return path;
   }
 
-  // Relative server path → prepend server base
   const separator = path.startsWith("/") ? "" : "/";
   const resolved = `${SERVER_BASE}${separator}${path}`;
-  console.log("[Avatar] Resolved relative path:", path, "→", resolved);
   return resolved;
 };
 
 const Notifications = () => {
-  const navigation = useNavigation();
-
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
@@ -75,7 +66,6 @@ const Notifications = () => {
       if (!response.ok) throw new Error(`Server error ${response.status}`);
 
       const res = await response.json();
-      console.log("res", res)
       if (res.success) {
         setRequests(res.data);
       } else {
@@ -156,7 +146,6 @@ const Notifications = () => {
     useEffect(() => {
       setHasError(false);
       setIsLoading(true);
-      console.log("[Avatar] URI changed to:", uri);
     }, [uri]);
 
     if (uri && !hasError) {
@@ -165,13 +154,11 @@ const Notifications = () => {
           <Image
             source={{
               uri,
-              // FIX: cache headers help with emulator image loading
               headers: { Pragma: "no-cache" },
             }}
             style={[style, { position: 'absolute', top: 0, left: 0 }]}
             resizeMode="cover"
             onLoad={() => {
-              console.log("[Avatar] Image loaded successfully:", uri);
               setIsLoading(false);
             }}
             onError={(e) => {
@@ -180,7 +167,6 @@ const Notifications = () => {
               setIsLoading(false);
             }}
           />
-          {/* Show initial while loading */}
           {isLoading && (
             <View style={[style, s.avatarFallback, { position: 'absolute', top: 0, left: 0 }]}>
               <ActivityIndicator size="small" color={T.mid} />
@@ -190,7 +176,6 @@ const Notifications = () => {
       );
     }
 
-    // Fallback: show initial letter
     return (
       <View style={[style, s.avatarFallback]}>
         <Text style={initialStyle}>{initial || "?"}</Text>
@@ -203,8 +188,6 @@ const Notifications = () => {
 
     const initial = (item?.requester?.name || "?").charAt(0).toUpperCase();
     const avatarUri = resolveImageUri(item?.requester?.profilePicture);
-
-    console.log("[Profile] avatarUri:", avatarUri);
 
     return (
       <View style={styles.card}>
@@ -297,8 +280,6 @@ const Notifications = () => {
 
 export default Notifications;
 
-const TILE = (width - 40 - 10) / 2;
-
 
 const s = StyleSheet.create({
   avatar: { width: 70, height: 70, borderRadius: 13, borderWidth: 1.5, borderColor: T.surface },
@@ -316,13 +297,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  // Mascot
   mascotImage: {
     width: 120,
     height: 120,
     marginBottom: 16,
   },
-  // Error state
   errorTitle: {
     color: "#FFFFFF",
     fontSize: 20,
@@ -350,7 +329,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  // Empty state
   emptyContainer: {
     alignItems: "center",
     marginTop: 80,
@@ -365,7 +343,6 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 13,
   },
-  // Cards
   card: {
     flexDirection: "row",
     backgroundColor: "#1A1A1A",

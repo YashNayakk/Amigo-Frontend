@@ -104,7 +104,6 @@ const Home = ({ navigation }) => {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      // Fetch performance data
       const perfResponse = await AuthService.authFetch(PerformanceEndpoints.GET_PERFORMANCE, {
         method: 'GET',
         headers: {
@@ -113,7 +112,6 @@ const Home = ({ navigation }) => {
         },
       });
       const perfData = await perfResponse.json();
-      console.log("perfd", perfData)
 
       setStats({
         streak: perfData?.data?.currentStreak,
@@ -123,8 +121,6 @@ const Home = ({ navigation }) => {
       })
     } catch (error) {
       console.error("Error loading performance:", error);
-    } finally {
-      console.log("hii")
     }
   };
 
@@ -329,11 +325,10 @@ const styles = StyleSheet.create({
 
   card: {
     flex: 1,
-    //width: width - 32,
     height: 140,
-    backgroundColor: T.surface,       // #101010
+    backgroundColor: T.surface,      
     borderWidth: 0.5,
-    borderColor: T.border,             // #1e1e1e
+    borderColor: T.border,            
     borderRadius: 14,
     paddingHorizontal: 20,
     paddingVertical: 14,
@@ -345,27 +340,26 @@ const styles = StyleSheet.create({
     top: -8,
     left: 12,
     fontSize: 80,
-    color: T.hi,                       // #2a2a2a
+    color: T.hi,                    
     fontFamily: 'serif',
     lineHeight: 90,
   },
   quoteText: {
     fontSize: 16,
-    color: T.text,                     // #efefef
+    color: T.text,                     
     fontStyle: 'italic',
-    fontFamily: 'serif',               // or your custom serif font
+    fontFamily: 'serif',              
     lineHeight: 20,
     marginBottom: 10,
     zIndex: 1,
   },
   movieText: {
     fontSize: 12,
-    color: T.dim,                      // #444
+    color: T.dim,                     
     fontFamily: 'sans-serif',
     zIndex: 1,
   },
 
-  // CAROUSEL
   carouselContainer: {
     alignItems: "center",
     marginBottom: 24,
@@ -392,7 +386,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
 
-  // DASHBOARD STATS
   dashboard: {
     paddingHorizontal: 20,
     marginBottom: 24,
@@ -425,7 +418,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // MASCOT SECTION
   mascotSection: {
     flexDirection: "row",
     alignItems: "center",
@@ -589,7 +581,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // MODAL
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.85)",
